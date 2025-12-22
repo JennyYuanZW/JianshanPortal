@@ -95,7 +95,7 @@ export const dbService = {
 
         // Return structured data
         return {
-            id: res.id as string, // CloudBase returns 'id' usually on add
+            id: (res as any).id as string, // CloudBase returns 'id' usually on add
             ...initialData as any
         };
     },
