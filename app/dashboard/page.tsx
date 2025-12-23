@@ -229,7 +229,7 @@ function ApplicationDetails({ app, user }: { app: Application, user: any }) {
                     <User className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
                         <p className="text-xs uppercase font-bold text-muted-foreground">Applicant Name</p>
-                        <p className="text-sm font-medium">{user.name}</p>
+                        <p className="text-sm font-medium">{user.displayName || user.email}</p>
                     </div>
                 </div>
                 <div className="h-px bg-border w-full"></div>
@@ -287,7 +287,7 @@ export default function DashboardPage() {
     useEffect(() => {
         const fetchApp = async () => {
             if (!user) return;
-            const uid = user.uid || user.id || user._id;
+            const uid = user.uid;
             console.log("Dashboard fetching app for:", uid);
             try {
                 const myApp = await dbService.getMyApplication(uid);
@@ -317,7 +317,7 @@ export default function DashboardPage() {
     const handleAdvance = async () => {
         if (!user || !app) return;
         setLoading(true);
-        const uid = user.uid || user.id || user._id;
+        const uid = user.uid;
         try {
             await dbService.advanceStatus(uid, app.status);
             // Re-fetch to see changes
@@ -481,7 +481,7 @@ export default function DashboardPage() {
                         */}
                         <Button onClick={async () => {
                             if (!user) return;
-                            const uid = user.uid || user.id || user._id;
+                            const uid = user.uid;
                             setLoading(true);
                             await dbService.resetApplication(uid);
                             router.push("/welcome");

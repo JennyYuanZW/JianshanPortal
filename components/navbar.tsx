@@ -66,7 +66,7 @@ export function Navbar() {
                                 onClick={() => { }} // Profile TODO
                             >
                                 <UserIcon className="h-4 w-4" />
-                                {user.name || (isAdmin ? 'Admin' : 'Student')}
+                                {user.displayName || user.email || (isAdmin ? 'Admin' : 'Student')}
                             </button>
 
                             <Button
@@ -110,7 +110,7 @@ export function Navbar() {
                         {user && (
                             <>
                                 <div className="text-base font-medium text-muted-foreground">
-                                    {user.name}
+                                    {user.displayName || user.email}
                                 </div>
                                 <button
                                     onClick={() => {

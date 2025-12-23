@@ -38,7 +38,7 @@ export default function AcceptancePage() {
 
     const handleConfirm = async () => {
         if (!user) return;
-        const uid = user.uid || user.id;
+        const uid = user.uid;
         setLoading(true);
         try {
             // Confirm enrollment by advancing status from decision_released -> enrolled
@@ -99,7 +99,7 @@ export default function AcceptancePage() {
                         </h2>
                         <div className="prose prose-lg font-serif text-primary/80 leading-relaxed max-w-full">
                             <p className="font-sans text-sm font-bold uppercase tracking-wide text-accent mb-4">Official Admission Decision</p>
-                            <p>Dear {user.name},</p>
+                            <p>Dear {user.displayName || user.email},</p>
                             <p>
                                 We are absolutely delighted to inform you that you have been accepted to the <strong className="text-primary font-semibold">Jianshan Summer Camp Class of 2024</strong>.
                             </p>

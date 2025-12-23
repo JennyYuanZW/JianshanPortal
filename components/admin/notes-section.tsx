@@ -27,7 +27,7 @@ export function NotesSection({ applicationId, notes, onNoteAdded }: NotesSection
         if (!newNote.trim()) return;
         setSubmitting(true);
         try {
-            const authorName = user?.name || user?.email || "Admin";
+            const authorName = user?.displayName || user?.email || "Admin";
             await dbService.addApplicationNote(applicationId, newNote, authorName);
             setNewNote("");
             onNoteAdded();

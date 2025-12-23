@@ -35,7 +35,7 @@ export default function ApplyPage() {
             if (!user) return;
             // Standardize ID usage. CloudBase 'user' typically has 'uid'.
             // Fallback to 'id' or '_id' if needed, but 'uid' is best for consistency with auth.
-            const uid = user.uid || user.id || user._id; // Ensure we get a valid string
+            const uid = user.uid; // Ensure we get a valid string
 
             console.log("Fetching application for user:", uid);
 
@@ -94,7 +94,7 @@ export default function ApplyPage() {
 
     const handleSave = async () => {
         if (!user || !app) return;
-        const uid = user.uid || user.id || user._id;
+        const uid = user.uid;
         console.log("Saving draft for:", uid);
         setSaving(true);
         try {
@@ -112,7 +112,7 @@ export default function ApplyPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !app) return;
-        const uid = user.uid || user.id || user._id;
+        const uid = user.uid;
         console.log("Submitting application for:", uid);
         setSaving(true);
         try {

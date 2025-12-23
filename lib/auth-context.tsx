@@ -2,12 +2,12 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from "next/navigation";
-import { auth } from '@/lib/cloudbase';
-import { isAdmin } from '@/lib/utils';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { isAdmin } from '@/lib/utils'; // Keep existing utility
 
-// Define a simplified User type based on CloudBase user or just use any
-// Cloudbase user typically has uid, email, etc.
-export type User = any;
+// Export User type from Firebase
+export type { User };
 
 interface AuthContextType {
     user: User | null;
@@ -27,55 +27,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Derived state for admin check. 
     // Note: In real app, this should be a claim or db lookup, but for now purely email based.
-    // CloudBase user object usually has 'email' or 'username'.
-    const isUserAdmin = user && (isAdmin(user.email) || isAdmin(user.username));
+    const isUserAdmin = user && user.email && isAdmin(user.email);
 
     useEffect(() => {
-        // 监听登录状态变化
-        if (!auth) {
-            setLoading(false);
-            return;
-        }
-
-        // @ts-ignore - cloudbase types might be missing or incomplete in this context
-        const authStateListener = (auth as any).onLoginStateChanged((loginState: any) => {
-            if (loginState) {
-                // 已登录
-                // console.log("Login state changed: ", loginState.user);
-                setUser(loginState.user);
+        // Listen for auth state changes
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Logged in
+                setUser(user);
             } else {
-                // 未登录
+                // Not logged in
                 setUser(null);
             }
             setLoading(false);
         });
 
-        return () => {
-            // 清理监听器 (if supported by SDK, otherwise just ignore)
-        };
+        return () => unsubscribe();
     }, []);
 
     const login = async (emailOrUsername: string, password?: string) => {
         if (!password) {
-            throw new Error("Password is required for CloudBase login");
-        }
-
-        // Ensure auth is initialized (client-side)
-        if (!auth) {
-            console.warn("Auth not initialized");
-            return;
+            throw new Error("Password is required for login");
         }
 
         setLoading(true);
         try {
-            // 使用 CloudBase 统一登录接口
-            await (auth as any).signIn({
-                username: emailOrUsername,
-                password: password
-            });
-            // 登录成功后 onLoginStateChanged 会触发
+            await signInWithEmailAndPassword(auth, emailOrUsername, password);
         } catch (error) {
-            console.error("CloudBase login failed:", error);
+            console.error("Firebase login failed:", error);
             throw error;
         } finally {
             setLoading(false);
@@ -91,9 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const logout = async () => {
         setLoading(true);
         try {
-            if (auth) {
-                await (auth as any).signOut();
-            }
+            await signOut(auth);
             setUser(null);
             router.push('/login');
         } catch (error) {

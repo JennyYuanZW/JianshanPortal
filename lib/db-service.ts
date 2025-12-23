@@ -1,4 +1,19 @@
-import { db } from '@/lib/cloudbase';
+import { db } from '@/lib/firebase';
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    setDoc,
+    updateDoc,
+    query,
+    where,
+    orderBy,
+    limit,
+    arrayUnion,
+    deleteField,
+    Timestamp
+} from "firebase/firestore";
 import { Application } from '@/lib/mock-api'; // Re-use type or define new one? Let's use clean types here.
 
 // Simplify Application type for DB to match requirement (Name + Status)
@@ -49,23 +64,17 @@ export const dbService = {
         if (!db) return null;
         console.log("[db-service] getMyApplication calling with:", userId);
 
-        // Removed try-catch to allow legitimate DB errors (network, permission) to bubble up.
-        // We only want to return null if the query successfully returns 0 results.
-        const res = await db.collection(COLLECTION)
-            .where({
-                userId: userId
-            })
-            .get();
+        // We assume userId is the doc ID based on createApplication logic
+        const docRef = doc(db, COLLECTION, userId);
+        const docSnap = await getDoc(docRef);
 
-        console.log("[db-service] getMyApplication res:", res);
+        console.log("[db-service] getMyApplication res exists:", docSnap.exists());
 
-        if (res.data && res.data.length > 0) {
-            // Map DB data to Application type
-            const data = res.data[0] as DBApplication;
-
+        if (docSnap.exists()) {
+            const data = docSnap.data() as DBApplication;
             // Return full structure expected by UI, filling defaults for missing fields
             return {
-                id: data._id as string,
+                id: data.userId, // Using userId as ID
                 userId: data.userId,
                 status: data.status,
                 submittedAt: data.timeline?.submittedAt,
@@ -85,7 +94,6 @@ export const dbService = {
             } as Application;
         }
 
-        // Only return null if we successfully queried and found nothing
         return null;
     },
 
@@ -95,7 +103,6 @@ export const dbService = {
         console.log("[db-service] creating application for user:", userId);
 
         const timestamp = new Date().toISOString();
-        // Do NOT include _id in the data payload for set(), as it's defined by doc(id)
         const initialData: Omit<DBApplication, '_id'> = {
             userId,
             status: 'draft',
@@ -113,14 +120,9 @@ export const dbService = {
         };
 
         try {
-            // Use .doc(userId).set() instead of .add()
-            const res = await db.collection(COLLECTION).doc(userId).set(initialData);
-            console.log("[db-service] created application result:", res);
-
-            // CloudBase SDK sanity check: sometimes it returns an object with 'code' on failure instead of throwing
-            if ((res as any).code) {
-                throw new Error(`CloudBase Create Failed: ${(res as any).code} - ${(res as any).message}`);
-            }
+            // Use setDoc with doc(db, COLLECTION, userId)
+            await setDoc(doc(db, COLLECTION, userId), initialData);
+            console.log("[db-service] created application for:", userId);
 
             // Return structured data
             return {
@@ -129,9 +131,8 @@ export const dbService = {
             };
         } catch (e: any) {
             console.error("[db-service] create application failed:", e);
-            // Enhance error message for permission issues
-            if (e.code === 'DATABASE_PERMISSION_DENIED' || (e.message && e.message.includes('permission'))) {
-                throw new Error(`CloudBase Permission Denied: Unable to create application record. Please contact administrator to check database permissions.`);
+            if (e.code === 'permission-denied') {
+                throw new Error(`Firebase Permission Denied: Unable to create application record.`);
             }
             throw e;
         }
@@ -142,8 +143,6 @@ export const dbService = {
         if (!db) return;
         console.log("[db-service] saving application for:", userId, data);
 
-        // We first need to find the doc ID or use where clause
-        // CloudBase safer to update by ID if known, or WHERE if unique. WHERE is easier here.
         const timestamp = new Date().toISOString();
 
         // Extract only what we want to save
@@ -151,26 +150,14 @@ export const dbService = {
             lastUpdatedAt: timestamp,
             'personalInfo.firstName': data.personalInfo?.firstName,
             'personalInfo.lastName': data.personalInfo?.lastName,
-            // Per request: "only store name fields... ignore others"
-            // But we might want to store others if provided, but let's stick to strict requirement FIRST.
-            // User said "只存application form中的姓名的两个field。不管其他的。"
-            // However, UI might break if we don't save other inputs?
-            // Actually, if we re-fetch, other inputs will be lost if not saved.
-            // Let's safe-guard the UI experience by saving them if present, but emphasize name is key.
-            // Or strictly follow "ignore others". If we ignore others, the specific implementation of "filling form" becomes useless for other fields.
-            // I will assumption: Save all personal info fields to avoid data loss bug feeling, but focus mainly on name structure.
-            // Actually, let's just save the whole 'personalInfo' object and 'essays' to be safe for a real demo, 
-            // unless strictly forbidden. The prompt says "regardless of others" implying "don't worry about complexity", not "must delete".
-            // I will save personalInfo and essays to ensure the app works.
             personalInfo: data.personalInfo,
             essays: data.essays
         };
 
         try {
-            const res = await db.collection(COLLECTION)
-                .where({ userId: userId })
-                .update(updates);
-            console.log("[db-service] save result:", res);
+            const docRef = doc(db, COLLECTION, userId);
+            await updateDoc(docRef, updates);
+            console.log("[db-service] save result success");
         } catch (e) {
             console.error("[db-service] save failed:", e);
             throw e;
@@ -178,26 +165,28 @@ export const dbService = {
     },
 
     // Submit: Change status, add submittedAt
+    // Submit: Change status, add submittedAt
     async submitApplication(userId: string) {
         if (!db) return;
         console.log("[db-service] submitting application for:", userId);
         const timestamp = new Date().toISOString();
 
         try {
-            const res = await db.collection(COLLECTION)
-                .where({ userId: userId })
-                .update({
-                    status: 'under_review',
-                    lastUpdatedAt: timestamp,
-                    'timeline.submittedAt': timestamp
-                });
-            console.log("[db-service] submit result:", res);
+            // Change to updateDoc
+            const docRef = doc(db, COLLECTION, userId);
+            await updateDoc(docRef, {
+                status: 'under_review',
+                lastUpdatedAt: timestamp,
+                'timeline.submittedAt': timestamp
+            });
+            console.log("[db-service] submit result success");
         } catch (e) {
             console.error("[db-service] submit failed:", e);
             throw e;
         }
     },
 
+    // Dev Tool: Advance Status
     // Dev Tool: Advance Status
     async advanceStatus(userId: string, currentStatus: string) {
         if (!db) return;
@@ -218,23 +207,23 @@ export const dbService = {
         updates.status = nextStatus;
         updates.lastUpdatedAt = timestamp;
 
-        await db.collection(COLLECTION).where({ userId }).update(updates);
+        await updateDoc(doc(db, COLLECTION, userId), updates);
     },
 
+    // Dev Tool: Reset
     // Dev Tool: Reset
     async resetApplication(userId: string) {
         if (!db) return;
         const timestamp = new Date().toISOString();
 
         // Reset to draft, specific timeline fields
-        const _ = db.command;
 
-        await db.collection(COLLECTION).where({ userId }).update({
+        await updateDoc(doc(db, COLLECTION, userId), {
             status: 'draft',
             lastUpdatedAt: timestamp,
-            'timeline.submittedAt': _.remove(),
-            'timeline.decisionReleasedAt': _.remove(),
-            'timeline.enrolledAt': _.remove()
+            'timeline.submittedAt': deleteField(),
+            'timeline.decisionReleasedAt': deleteField(),
+            'timeline.enrolledAt': deleteField()
         });
     }, // Added comma here
 
@@ -245,14 +234,14 @@ export const dbService = {
 
         try {
             // Retrieve all records. 
-            // Note: CloudBase limit is 1000 per request usually, might need pagination for real scale.
-            // For now, simple .limit(1000)
-            const res = await db.collection(COLLECTION)
-                .limit(1000)
-                .orderBy('lastUpdatedAt', 'desc')
-                .get();
+            const q = query(collection(db, COLLECTION), orderBy('lastUpdatedAt', 'desc'), limit(1000));
+            const querySnapshot = await getDocs(q);
 
-            return (res.data || []) as DBApplication[];
+            const apps: DBApplication[] = [];
+            querySnapshot.forEach((doc) => {
+                apps.push(doc.data() as DBApplication);
+            });
+            return apps;
         } catch (e) {
             console.error("[db-service] get all failed", e);
             throw e;
@@ -269,10 +258,9 @@ export const dbService = {
             date: timestamp
         };
 
-        const _ = db.command;
-        await db.collection(COLLECTION).where({ userId }).update({
-            // Use array push approach
-            'adminData.notes': _.push(newNote),
+        const docRef = doc(db, COLLECTION, userId);
+        await updateDoc(docRef, {
+            'adminData.notes': arrayUnion(newNote),
             lastUpdatedAt: timestamp
         });
     },
@@ -287,7 +275,8 @@ export const dbService = {
             lastUpdatedAt: timestamp
         };
 
-        await db.collection(COLLECTION).where({ userId }).update(updates);
+        const docRef = doc(db, COLLECTION, userId);
+        await updateDoc(docRef, updates);
     },
 
     // Admin: Release Result (updates public status)
@@ -295,15 +284,13 @@ export const dbService = {
         if (!db) return;
 
         // Fetch current doc to get internal decision
-        const current = await this.getMyApplication(userId);
-        // Wait, getMyApplication returns Application which hides adminData. 
-        // We need raw access or a helper.
-        // Let's do raw fetch.
-        const res = await db.collection(COLLECTION).where({ userId }).get();
-        if (!res.data || res.data.length === 0) return;
+        const docRef = doc(db, COLLECTION, userId);
 
-        const doc = res.data[0] as DBApplication;
-        const decision = doc.adminData?.internalDecision;
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) return;
+
+        const data = docSnap.data() as DBApplication;
+        const decision = data.adminData?.internalDecision;
 
         if (!decision) {
             throw new Error("No internal decision marked to release.");
@@ -323,8 +310,6 @@ export const dbService = {
             'timeline.decisionReleasedAt': timestamp
         };
 
-        // If accepted, we might want to set enrolledAt to null to be safe or just wait for enrollment
-
-        await db.collection(COLLECTION).where({ userId }).update(updates);
+        await updateDoc(docRef, updates);
     }
 };
