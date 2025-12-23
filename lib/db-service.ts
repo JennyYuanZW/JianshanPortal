@@ -30,6 +30,15 @@ export interface DBApplication {
         question1: string;
         question2: string;
     };
+    // Admin specific data
+    adminData?: {
+        internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
+        notes?: Array<{
+            content: string;
+            author: string;
+            date: string;
+        }>;
+    };
 }
 
 const COLLECTION = 'applications';
@@ -120,6 +129,10 @@ export const dbService = {
             };
         } catch (e: any) {
             console.error("[db-service] create application failed:", e);
+            // Enhance error message for permission issues
+            if (e.code === 'DATABASE_PERMISSION_DENIED' || (e.message && e.message.includes('permission'))) {
+                throw new Error(`CloudBase Permission Denied: Unable to create application record. Please contact administrator to check database permissions.`);
+            }
             throw e;
         }
     },
@@ -214,13 +227,6 @@ export const dbService = {
         const timestamp = new Date().toISOString();
 
         // Reset to draft, specific timeline fields
-        // CloudBase update command can remove fields? command.remove() usually.
-        // For simplicity, just set them to null or empty string if schema allows, or just ignore.
-
-        /* 
-           CloudBase Command to remove is db.command.remove()
-           import { db } from ... -> const _ = db.command;
-        */
         const _ = db.command;
 
         await db.collection(COLLECTION).where({ userId }).update({
@@ -230,5 +236,95 @@ export const dbService = {
             'timeline.decisionReleasedAt': _.remove(),
             'timeline.enrolledAt': _.remove()
         });
+    }, // Added comma here
+
+    // Admin: Get all applications
+    async getAllApplications(): Promise<DBApplication[]> {
+        if (!db) return [];
+        console.log("[db-service] getting all applications");
+
+        try {
+            // Retrieve all records. 
+            // Note: CloudBase limit is 1000 per request usually, might need pagination for real scale.
+            // For now, simple .limit(1000)
+            const res = await db.collection(COLLECTION)
+                .limit(1000)
+                .orderBy('lastUpdatedAt', 'desc')
+                .get();
+
+            return (res.data || []) as DBApplication[];
+        } catch (e) {
+            console.error("[db-service] get all failed", e);
+            throw e;
+        }
+    },
+
+    // Admin: Add Note
+    async addApplicationNote(userId: string, note: string, author: string) {
+        if (!db) return;
+        const timestamp = new Date().toISOString();
+        const newNote = {
+            content: note,
+            author,
+            date: timestamp
+        };
+
+        const _ = db.command;
+        await db.collection(COLLECTION).where({ userId }).update({
+            // Use array push approach
+            'adminData.notes': _.push(newNote),
+            lastUpdatedAt: timestamp
+        });
+    },
+
+    // Admin: Set Internal Decision (does not notify user)
+    async setInternalDecision(userId: string, decision: 'accepted' | 'rejected' | 'waitlisted') {
+        if (!db) return;
+
+        const timestamp = new Date().toISOString();
+        const updates: any = {
+            'adminData.internalDecision': decision,
+            lastUpdatedAt: timestamp
+        };
+
+        await db.collection(COLLECTION).where({ userId }).update(updates);
+    },
+
+    // Admin: Release Result (updates public status)
+    async releaseResult(userId: string) {
+        if (!db) return;
+
+        // Fetch current doc to get internal decision
+        const current = await this.getMyApplication(userId);
+        // Wait, getMyApplication returns Application which hides adminData. 
+        // We need raw access or a helper.
+        // Let's do raw fetch.
+        const res = await db.collection(COLLECTION).where({ userId }).get();
+        if (!res.data || res.data.length === 0) return;
+
+        const doc = res.data[0] as DBApplication;
+        const decision = doc.adminData?.internalDecision;
+
+        if (!decision) {
+            throw new Error("No internal decision marked to release.");
+        }
+
+        let publicStatus = '';
+        const timestamp = new Date().toISOString();
+
+        // Map decision to status
+        if (decision === 'accepted') publicStatus = 'decision_released'; // Accepted -> decision released (Acceptance Letter)
+        if (decision === 'rejected') publicStatus = 'rejected';
+        if (decision === 'waitlisted') publicStatus = 'waitlisted';
+
+        const updates: any = {
+            status: publicStatus,
+            lastUpdatedAt: timestamp,
+            'timeline.decisionReleasedAt': timestamp
+        };
+
+        // If accepted, we might want to set enrolledAt to null to be safe or just wait for enrollment
+
+        await db.collection(COLLECTION).where({ userId }).update(updates);
     }
 };

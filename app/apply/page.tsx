@@ -57,8 +57,11 @@ export default function ApplyPage() {
             } catch (err: any) {
                 console.error("Error fetching/creating application:", err);
                 // If permission denied, explicit alert
-                if (err.code === 'DATABASE_PERMISSION_DENIED' || (err.message && err.message.includes('permission'))) {
-                    alert("Database Permission Denied. Please contact administrator (Check Console).");
+                // If permission denied, explicit alert
+                if (err.message && err.message.includes('CloudBase Permission Denied')) {
+                    alert("Account Setup Error: Database permission denied. Please contact the administrator.");
+                } else if (err.code === 'DATABASE_PERMISSION_DENIED') {
+                    alert("Database Permission Denied. Please contact administrator.");
                 } else {
                     alert("Failed to load application. " + (err.message || "Unknown error"));
                 }

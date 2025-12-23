@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock, Mail, MessagesSquare } from "lucide-react";
+import { isAdmin } from "@/lib/utils";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -23,12 +24,15 @@ export default function LoginPage() {
         setError("");
         try {
             await login(email, password);
-            // Router redirect handled in page.tsx usually, but here we can push
-            router.push("/dashboard");
+
+            // Check if logging in as admin
+            if (isAdmin(email)) {
+                router.push("/admin/dashboard");
+            } else {
+                router.push("/dashboard");
+            }
         } catch (error: any) {
             console.error("Login failed", error);
-            // Customize error message based on common auth errors if needed
-            // Default to a user-friendly message for invalid credentials
             setError("Invalid username or password. Please try again.");
         } finally {
             setLoading(false);

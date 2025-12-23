@@ -23,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${plusJakarta.className} antialiased min-h-screen flex flex-col`}>
+      <body suppressHydrationWarning className={`${plusJakarta.className} antialiased min-h-screen flex flex-col`}>
         <AuthProvider>
           <Navbar />
           <main className="flex-1">

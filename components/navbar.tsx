@@ -9,7 +9,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
-    const { user, logout } = useAuth();
+    const { user, logout, isAdmin } = useAuth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const pathname = usePathname();
 
@@ -25,34 +25,48 @@ export function Navbar() {
         <header className="sticky top-0 z-50 w-full border-b bg-white">
             <div className="container px-4 md:px-8 flex h-16 items-center justify-between mx-auto max-w-7xl">
                 <div className="flex items-center gap-2 md:gap-4">
-                    <Link href="/" className="flex items-center gap-2">
+                    <Link href={isAdmin ? "/admin/dashboard" : "/"} className="flex items-center gap-2">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                             <Tent className="h-5 w-5" />
                         </div>
                         <span className="font-bold text-lg text-foreground">
-                            Jianshan Academy
+                            {isAdmin ? "Admin Portal" : "Jianshan Academy"}
                         </span>
                     </Link>
                 </div>
 
                 <div className="flex items-center gap-6">
-                    {/* Desktop Nav Items: FAQ, Username, Logout */}
-                    <Link
-                        href="/faq"
-                        className={cn("text-sm font-medium transition-colors hover:text-primary hidden sm:block", pathname === '/faq' ? "text-primary" : "text-muted-foreground")}
-                    >
-                        FAQ
-                    </Link>
+                    {/* Desktop Nav Items */}
+
+                    {/* Admin Links */}
+                    {isAdmin && (
+                        <Link
+                            href="/admin/dashboard"
+                            className={cn("text-sm font-medium transition-colors hover:text-primary hidden sm:block", pathname.startsWith('/admin') ? "text-primary" : "text-muted-foreground")}
+                        >
+                            Dashboard
+                        </Link>
+                    )}
+
+                    {/* Standard User Links - Only show if NOT admin */}
+                    {!isAdmin && (
+                        <Link
+                            href="/faq"
+                            className={cn("text-sm font-medium transition-colors hover:text-primary hidden sm:block", pathname === '/faq' ? "text-primary" : "text-muted-foreground")}
+                        >
+                            FAQ
+                        </Link>
+                    )}
 
                     {user ? (
                         <>
-                            {/* Username link (Profile placeholder) */}
+                            {/* Username link */}
                             <button
                                 className="text-sm font-medium text-muted-foreground hover:text-primary hidden sm:flex items-center gap-2"
                                 onClick={() => { }} // Profile TODO
                             >
                                 <UserIcon className="h-4 w-4" />
-                                {user.name || 'Student'}
+                                {user.name || (isAdmin ? 'Admin' : 'Student')}
                             </button>
 
                             <Button

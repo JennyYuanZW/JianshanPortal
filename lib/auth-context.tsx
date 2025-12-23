@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from "next/navigation";
 import { auth } from '@/lib/cloudbase';
+import { isAdmin } from '@/lib/utils';
 
 // Define a simplified User type based on CloudBase user or just use any
 // Cloudbase user typically has uid, email, etc.
@@ -11,6 +12,7 @@ export type User = any;
 interface AuthContextType {
     user: User | null;
     loading: boolean;
+    isAdmin: boolean;
     login: (email: string, password?: string) => Promise<void>;
     register: (email: string, name?: string) => Promise<void>;
     logout: () => Promise<void>;
@@ -23,6 +25,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
+    // Derived state for admin check. 
+    // Note: In real app, this should be a claim or db lookup, but for now purely email based.
+    // CloudBase user object usually has 'email' or 'username'.
+    const isUserAdmin = user && (isAdmin(user.email) || isAdmin(user.username));
+
     useEffect(() => {
         // 监听登录状态变化
         if (!auth) {
@@ -34,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const authStateListener = (auth as any).onLoginStateChanged((loginState: any) => {
             if (loginState) {
                 // 已登录
+                // console.log("Login state changed: ", loginState.user);
                 setUser(loginState.user);
             } else {
                 // 未登录
@@ -44,8 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         return () => {
             // 清理监听器 (if supported by SDK, otherwise just ignore)
-            // legacy cloudbase sdk might not return unsubscribe function directly, but check docs if needed.
-            // For now we assume no cleanup needed or it's handled.
         };
     }, []);
 
@@ -98,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, loading, isAdmin: !!isUserAdmin, login, register, logout }}>
             {children}
         </AuthContext.Provider>
     );
