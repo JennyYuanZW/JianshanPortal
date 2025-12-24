@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from "next/navigation";
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { isAdmin } from '@/lib/utils'; // Keep existing utility
 
 // Export User type from Firebase
@@ -14,7 +14,8 @@ interface AuthContextType {
     loading: boolean;
     isAdmin: boolean;
     login: (email: string, password?: string) => Promise<void>;
-    register: (email: string, name?: string) => Promise<void>;
+    loginWithGoogle: () => Promise<void>;
+    register: (email: string, name?: string, password?: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -53,18 +54,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(true);
         try {
             await signInWithEmailAndPassword(auth, emailOrUsername, password);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Firebase login failed:", error);
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                throw new Error("Invalid email or password");
+            }
             throw error;
         } finally {
             setLoading(false);
         }
     };
 
-    const register = async (email: string, name?: string) => {
-        // 目前不实现注册功能
-        console.warn("Registration is currently disabled.");
-        throw new Error("Registration disabled");
+    const loginWithGoogle = async () => {
+        setLoading(true);
+        try {
+            const provider = new GoogleAuthProvider();
+            await signInWithPopup(auth, provider);
+        } catch (error: any) {
+            console.error("Google login failed:", error);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const register = async (email: string, name?: string, password?: string) => { // Added password param
+        if (!password) {
+            throw new Error("Password is required for registration");
+        }
+        setLoading(true);
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            if (name) {
+                await updateProfile(userCredential.user, {
+                    displayName: name
+                });
+                // Force reload user to get updated profile
+                await userCredential.user.reload();
+                if (auth.currentUser) {
+                    setUser(auth.currentUser);
+                }
+            }
+        } catch (error: any) {
+            console.error("Registration failed:", error);
+            if (error.code === 'auth/email-already-in-use') {
+                throw new Error("Email already in use");
+            }
+            throw error;
+        } finally {
+            setLoading(false);
+        }
     };
 
     const logout = async () => {
@@ -81,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, isAdmin: !!isUserAdmin, login, register, logout }}>
+        <AuthContext.Provider value={{ user, loading, isAdmin: !!isUserAdmin, login, loginWithGoogle, register, logout }}>
             {children}
         </AuthContext.Provider>
     );

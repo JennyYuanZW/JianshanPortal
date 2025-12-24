@@ -43,7 +43,7 @@ export default function RegisterPage() {
 
         setLoading(true);
         try {
-            await register(formData.email, formData.username);
+            await register(formData.email, formData.username, formData.password);
             // Wait a bit to ensure state updates or just push
             router.push("/dashboard"); // Redirect to Dashboard which will decide where to go
         } catch (error: any) {
