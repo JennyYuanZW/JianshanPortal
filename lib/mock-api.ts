@@ -23,6 +23,10 @@ export interface Application {
     school: string;
     grade: string;
   };
+  academicInfo?: {
+    subjectGroup?: string;
+  };
+  availability?: string[];
   essays: {
     question1: string;
     question2: string;

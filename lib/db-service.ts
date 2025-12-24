@@ -33,6 +33,10 @@ export interface DBApplication {
         school?: string;
         grade?: string;
     };
+    academicInfo?: {
+        subjectGroup?: string; // e.g. Computer Science, Math, etc.
+    };
+    availability?: string[]; // e.g. ["June Session", "July Session"]
     timeline: {
         registeredAt?: string;
         submittedAt?: string;
@@ -48,6 +52,9 @@ export interface DBApplication {
     // Admin specific data
     adminData?: {
         internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
+        campAllocation?: string; // e.g. "Camp Alpha"
+        reviewScore?: number; // 0-5
+        reviewStatus?: 'reviewed' | 'pending';
         notes?: Array<{
             content: string;
             author: string;
@@ -310,6 +317,40 @@ export const dbService = {
             'timeline.decisionReleasedAt': timestamp
         };
 
+        await updateDoc(docRef, updates);
+    },
+
+    // Admin: Save Comprehensive Review (Score, Decision, Comment)
+    async updateAdminReview(userId: string, data: {
+        reviewScore?: number;
+        internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
+        note?: string; // Optional new note to append
+        author?: string;
+    }) {
+        if (!db) return;
+        const timestamp = new Date().toISOString();
+        const updates: any = {
+            lastUpdatedAt: timestamp
+        };
+
+        if (data.reviewScore !== undefined) {
+            updates['adminData.reviewScore'] = data.reviewScore;
+        }
+        if (data.internalDecision !== undefined) {
+            updates['adminData.internalDecision'] = data.internalDecision;
+        }
+
+        // If there's a note, arrayUnion it
+        if (data.note && data.author) {
+            const newNote = {
+                content: data.note,
+                author: data.author,
+                date: timestamp
+            };
+            updates['adminData.notes'] = arrayUnion(newNote);
+        }
+
+        const docRef = doc(db, COLLECTION, userId);
         await updateDoc(docRef, updates);
     }
 };

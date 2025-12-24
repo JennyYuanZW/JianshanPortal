@@ -73,23 +73,41 @@ export default function ApplyPage() {
     }, [user]);
 
     // Handle Input Change (Deep update helper)
-    const handleChange = (section: keyof Application | string, field: string, value: string) => {
+    const handleChange = (section: keyof Application | string, field: string, value: string | string[]) => {
         if (!app) return;
 
         setApp(prev => {
             if (!prev) return null;
-            // Handle nested objects like personalInfo.firstName
-            if (section === 'personalInfo' || section === 'essays') {
+
+            // Handle nested objects
+            if (section === 'personalInfo' || section === 'essays' || section === 'academicInfo') {
                 return {
                     ...prev,
                     [section]: {
-                        ...prev[section as 'personalInfo' | 'essays'],
+                        ...prev[section as 'personalInfo' | 'essays' | 'academicInfo'] || {},
                         [field]: value
                     }
                 }
             }
+            // Handle top-level fields (like availability)
+            if (section === 'root') {
+                return {
+                    ...prev,
+                    [field]: value
+                }
+            }
+
             return prev;
         });
+    };
+
+    const toggleAvailability = (session: string) => {
+        if (!app) return;
+        const current = app.availability || [];
+        const newAvailability = current.includes(session)
+            ? current.filter(s => s !== session)
+            : [...current, session];
+        handleChange('root', 'availability', newAvailability);
     };
 
     const handleSave = async () => {
@@ -258,6 +276,47 @@ export default function ApplyPage() {
                                                 <SelectItem value="Other">Other</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label>Subject Interest</Label>
+                                        <Select
+                                            disabled={isReadonly}
+                                            value={app.academicInfo?.subjectGroup || ''}
+                                            onValueChange={(val) => handleChange('academicInfo', 'subjectGroup', val)}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select primary interest" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Computer Science">Computer Science</SelectItem>
+                                                <SelectItem value="Mathematics">Mathematics</SelectItem>
+                                                <SelectItem value="Physics">Physics</SelectItem>
+                                                <SelectItem value="Biology">Biology</SelectItem>
+                                                <SelectItem value="Chemistry">Chemistry</SelectItem>
+                                                <SelectItem value="Economics">Economics</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="grid gap-2 md:col-span-2">
+                                        <Label className="mb-2 block">Camp Session Availability (Select all that apply)</Label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {['June Session', 'July Session', 'August Session', 'Flexible'].map((session) => (
+                                                <div key={session} className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 transition-colors">
+                                                    <Checkbox
+                                                        id={session}
+                                                        checked={(app.availability || []).includes(session)}
+                                                        onCheckedChange={() => toggleAvailability(session)}
+                                                        disabled={isReadonly}
+                                                    />
+                                                    <label
+                                                        htmlFor={session}
+                                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer w-full h-full flex items-center"
+                                                    >
+                                                        {session}
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
