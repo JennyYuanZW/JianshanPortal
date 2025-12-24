@@ -171,7 +171,22 @@ export default function LoginPage() {
                             onClick={async () => {
                                 try {
                                     await loginWithGoogle();
-                                    router.push("/dashboard");
+                                    // Check if the user is an admin after successful login
+                                    // We use a small delay or check auth directly if possible, 
+                                    // but since loginWithGoogle waits for popup, the auth state should be ready.
+                                    // However, without direct access to the user object here, we might need to rely on the context updating
+                                    // or fetch the user from firebase direct.
+                                    // Simpler: Just rely on router push and let them navigate, or:
+                                    // Better: We can import auth from firebase to check instantly.
+                                    const { auth } = await import("@/lib/firebase"); // Dynamic import to avoid top-level if needed, or just add top level.
+                                    // Actually, let's just do a router push to dashboard, but if we can check admin, great.
+                                    // But wait, the previous code block only pushed to /dashboard.
+                                    // Let's check:
+                                    if (auth.currentUser?.email && isAdmin(auth.currentUser.email)) {
+                                        router.push("/admin/dashboard");
+                                    } else {
+                                        router.push("/dashboard");
+                                    }
                                 } catch (error) {
                                     console.error("Google login failed", error);
                                 }

@@ -10,6 +10,7 @@ export function cn(...inputs: ClassValue[]) {
 // Hardcoded list of admin usernames
 export const ADMIN_USERNAMES = [
   'admin',
+  'jennyyuan0204@gmail.com',
 ];
 
 export function isAdmin(identifier?: string | null): boolean {
