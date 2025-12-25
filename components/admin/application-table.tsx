@@ -28,7 +28,7 @@ export function AdminApplicationTable({ applications }: AdminApplicationTablePro
     const safeApps = applications || [];
     const filteredApps = safeApps.filter(app => {
         const nameMatch = (
-            (app.personalInfo?.firstName || "") + " " + (app.personalInfo?.lastName || "")
+            (app.personalInfoSnapshot?.firstName || "") + " " + (app.personalInfoSnapshot?.lastName || "")
         ).toLowerCase().includes(search.toLowerCase());
 
         const statusMatch = statusFilter === "all" || app.status === statusFilter;
@@ -199,14 +199,14 @@ export function AdminApplicationTable({ applications }: AdminApplicationTablePro
                                         <Checkbox
                                             checked={selectedIds.has(app.userId)}
                                             onCheckedChange={() => toggleSelectRow(app.userId)}
-                                            aria-label={`Select ${app.personalInfo?.lastName}`}
+                                            aria-label={`Select ${app.personalInfoSnapshot?.lastName}`}
                                             disabled={!isEligibleForRelease(app)}
                                         />
                                     </TableCell>
                                     <TableCell className="font-medium">
-                                        {app.personalInfo?.lastName} {app.personalInfo?.firstName}
+                                        {app.personalInfoSnapshot?.lastName} {app.personalInfoSnapshot?.firstName}
                                         <br />
-                                        <span className="text-xs text-muted-foreground">{app.personalInfo?.phone || "No Phone"}</span>
+                                        <span className="text-xs text-muted-foreground">{app.personalInfoSnapshot?.email || "No Email"}</span>
                                     </TableCell>
                                     <TableCell>
                                         <StatusBadge status={app.status} />
