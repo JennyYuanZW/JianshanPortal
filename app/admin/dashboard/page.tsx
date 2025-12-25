@@ -57,22 +57,23 @@ export default function AdminDashboardPage() {
         if (searchQuery) {
             const lowerQuery = searchQuery.toLowerCase();
             result = result.filter(app =>
-                app.personalInfo.firstName.toLowerCase().includes(lowerQuery) ||
-                app.personalInfo.lastName.toLowerCase().includes(lowerQuery) ||
+                (app.personalInfoSnapshot?.firstName || "").toLowerCase().includes(lowerQuery) ||
+                (app.personalInfoSnapshot?.lastName || "").toLowerCase().includes(lowerQuery) ||
                 app.userId.toLowerCase().includes(lowerQuery) ||
-                (app.personalInfo.school || "").toLowerCase().includes(lowerQuery)
+                (app.personalInfoSnapshot?.school || "").toLowerCase().includes(lowerQuery)
             );
         }
 
         // Dropdown Filters
         if (subjectFilter !== "All Subjects") {
-            result = result.filter(app => app.academicInfo?.subjectGroup === subjectFilter);
+            result = result.filter(app => app.formData?.subjectGroup === subjectFilter);
         }
         if (availabilityFilter !== "All Availabilities") {
-            // Check if array includes the specific availability
-            result = result.filter(app => (app.availability || []).includes(availabilityFilter));
-            // Or strictly match if using single select logic? The UI HTML implies single select filter.
-            // But data is array. "Flexible" is an option.
+            // Check if array includes the specific availability (stored in formData)
+            result = result.filter(app => {
+                const avail = app.formData?.availability;
+                return Array.isArray(avail) && avail.includes(availabilityFilter);
+            });
         }
         if (allocationFilter !== "All Allocations") {
             if (allocationFilter === "Unallocated") {
@@ -82,14 +83,10 @@ export default function AdminDashboardPage() {
             }
         }
         if (statusFilter !== "All Statuses") {
-            // Map UI status filter to DB status
-            // Pending -> draft, submitted, under_review? Usually "Pending" Review.
             if (statusFilter === "Pending") {
                 result = result.filter(app => ['submitted', 'under_review'].includes(app.status));
             } else if (statusFilter === "Accepted") {
-                result = result.filter(app => ['decision_released', 'enrolled'].includes(app.status)); // Assuming accepted means decision released (and internal decision accepted)
-                // Better: filter by internal decision or public status?
-                // HTML shows "Accepted" tag.
+                result = result.filter(app => ['decision_released', 'enrolled', 'accepted'].includes(app.status));
             } else if (statusFilter === "Rejected") {
                 result = result.filter(app => app.status === 'rejected');
             }
@@ -102,12 +99,12 @@ export default function AdminDashboardPage() {
         const headers = ["ID", "Name", "Email", "School", "Grade", "Subject", "Availability", "Allocation", "Status"];
         const rows = filteredApps.map(app => [
             app.userId,
-            `${app.personalInfo.firstName} ${app.personalInfo.lastName}`,
-            "", // Email not currently in DBApplication top level, usually in auth/user obj. Can't easy get here without mapping.
-            app.personalInfo.school || "",
-            app.personalInfo.grade || "",
-            app.academicInfo?.subjectGroup || "",
-            (app.availability || []).join("; "),
+            `${app.personalInfoSnapshot?.firstName || ""} ${app.personalInfoSnapshot?.lastName || ""}`,
+            app.personalInfoSnapshot?.email || "",
+            app.personalInfoSnapshot?.school || "",
+            app.personalInfoSnapshot?.grade || "",
+            app.formData?.subjectGroup || "",
+            (app.formData?.availability || []).join("; "),
             app.adminData?.campAllocation || "",
             app.status
         ]);
@@ -132,30 +129,9 @@ export default function AdminDashboardPage() {
     if (!isAdmin) return null;
 
     return (
-        <div className="bg-slate-50 dark:bg-slate-900 min-h-screen flex flex-col font-sans text-slate-700 dark:text-slate-200">
-            {/* Header */}
-            <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-8 sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-slate-800 text-white p-1.5 rounded flex items-center justify-center">
-                            <LayoutDashboard size={20} />
-                        </div>
-                        <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Admin Portal</h1>
-                    </div>
-                    <nav className="flex items-center gap-6 text-sm font-medium text-slate-500 dark:text-slate-400">
-                        <a className="text-slate-800 dark:text-white font-semibold" href="#">Dashboard</a>
-                        <div className="flex items-center gap-2 cursor-pointer hover:text-slate-800 dark:hover:text-white transition-colors">
-                            <User size={18} />
-                            <span>{user?.email}</span>
-                        </div>
-                        <button onClick={() => logout()} aria-label="Logout" className="hover:text-slate-800 dark:hover:text-white transition-colors">
-                            <LogOut size={18} />
-                        </button>
-                    </nav>
-                </div>
-            </header>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100">
 
-            <main className="flex-grow p-8">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="max-w-[90rem] mx-auto space-y-6">
                     {/* Page Title */}
                     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -237,10 +213,10 @@ export default function AdminDashboardPage() {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
                                                     <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center font-bold text-sm">
-                                                        {app.personalInfo.firstName[0]}{app.personalInfo.lastName[0]}
+                                                        {(app.personalInfoSnapshot?.firstName || "?")[0]}{(app.personalInfoSnapshot?.lastName || "?")[0]}
                                                     </div>
                                                     <div className="ml-4">
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{app.personalInfo.firstName} {app.personalInfo.lastName}</div>
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{app.personalInfoSnapshot?.firstName} {app.personalInfoSnapshot?.lastName}</div>
                                                         <div className="text-xs text-slate-500 dark:text-slate-400">ID: {app.userId.slice(0, 8)}...</div>
                                                     </div>
                                                 </div>
@@ -248,14 +224,14 @@ export default function AdminDashboardPage() {
 
                                             {/* Subject */}
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">{app.academicInfo?.subjectGroup || "-"}</span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">{app.formData?.subjectGroup || "-"}</span>
                                             </td>
 
                                             {/* Availability */}
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex flex-col text-sm text-gray-600 dark:text-gray-400">
-                                                    {(app.availability && app.availability.length > 0) ? (
-                                                        app.availability.map(s => (
+                                                    {(app.formData?.availability && Array.isArray(app.formData.availability) && app.formData.availability.length > 0) ? (
+                                                        app.formData.availability.map((s: string) => (
                                                             <div key={s} className="flex items-center">
                                                                 <Calendar size={14} className="mr-1 text-slate-400" />
                                                                 {s}

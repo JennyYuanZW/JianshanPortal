@@ -22,21 +22,22 @@ import { Application } from '@/lib/mock-api'; // Re-use type or define new one? 
 
 export interface DBApplication {
     _id?: string;
-    _openid?: string;
+    // Core Identity
     userId: string;
     status: 'draft' | 'submitted' | 'under_review' | 'decision_released' | 'enrolled' | 'rejected' | 'waitlisted';
-    personalInfo: {
+
+    // Dynamic Form Data (Keyed by config IDs)
+    formData: Record<string, any>;
+
+    // Snapshot of key info for easier indexing/dashboard display (populated from formData on save)
+    personalInfoSnapshot: {
         firstName: string;
         lastName: string;
-        phone?: string;
-        wechatId?: string;
-        school?: string;
+        email?: string;
+        school?: string; // from yearOfStudy or fieldOfStudy?
         grade?: string;
     };
-    academicInfo?: {
-        subjectGroup?: string; // e.g. Computer Science, Math, etc.
-    };
-    availability?: string[]; // e.g. ["June Session", "July Session"]
+
     timeline: {
         registeredAt?: string;
         submittedAt?: string;
@@ -44,11 +45,7 @@ export interface DBApplication {
         enrolledAt?: string;
     };
     lastUpdatedAt: string;
-    // Keep other fields optional/empty to satisfy frontend type if we cast it
-    essays?: {
-        question1: string;
-        question2: string;
-    };
+
     // Admin specific data
     adminData?: {
         internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
@@ -67,45 +64,22 @@ const COLLECTION = 'applications';
 
 export const dbService = {
     // Get user's application
-    async getMyApplication(userId: string): Promise<Application | null> {
+    async getMyApplication(userId: string): Promise<DBApplication | null> {
         if (!db) return null;
         console.log("[db-service] getMyApplication calling with:", userId);
 
-        // We assume userId is the doc ID based on createApplication logic
         const docRef = doc(db, COLLECTION, userId);
         const docSnap = await getDoc(docRef);
 
-        console.log("[db-service] getMyApplication res exists:", docSnap.exists());
-
         if (docSnap.exists()) {
-            const data = docSnap.data() as DBApplication;
-            // Return full structure expected by UI, filling defaults for missing fields
-            return {
-                id: data.userId, // Using userId as ID
-                userId: data.userId,
-                status: data.status,
-                submittedAt: data.timeline?.submittedAt,
-                lastUpdatedAt: data.lastUpdatedAt,
-                personalInfo: {
-                    firstName: data.personalInfo?.firstName || '',
-                    lastName: data.personalInfo?.lastName || '',
-                    phone: data.personalInfo?.phone || '',
-                    wechatId: data.personalInfo?.wechatId || '',
-                    school: data.personalInfo?.school || '',
-                    grade: data.personalInfo?.grade || ''
-                },
-                essays: {
-                    question1: data.essays?.question1 || '',
-                    question2: data.essays?.question2 || ''
-                }
-            } as Application;
+            return docSnap.data() as DBApplication;
         }
 
         return null;
     },
 
     // Create a new draft application
-    async createApplication(userId: string): Promise<Application> {
+    async createApplication(userId: string): Promise<DBApplication> {
         if (!db) throw new Error("DB not initialized");
         console.log("[db-service] creating application for user:", userId);
 
@@ -113,52 +87,57 @@ export const dbService = {
         const initialData: Omit<DBApplication, '_id'> = {
             userId,
             status: 'draft',
-            personalInfo: {
+            formData: {}, // Empty start
+            personalInfoSnapshot: {
                 firstName: '',
-                lastName: '',
-                phone: '',
-                wechatId: '',
-                school: '',
-                grade: ''
+                lastName: ''
             },
             timeline: { registeredAt: timestamp },
             lastUpdatedAt: timestamp,
-            essays: { question1: '', question2: '' }
         };
 
         try {
-            // Use setDoc with doc(db, COLLECTION, userId)
             await setDoc(doc(db, COLLECTION, userId), initialData);
             console.log("[db-service] created application for:", userId);
 
-            // Return structured data
             return {
-                id: userId,
-                ...initialData as any
+                ...initialData
             };
         } catch (e: any) {
             console.error("[db-service] create application failed:", e);
-            if (e.code === 'permission-denied') {
-                throw new Error(`Firebase Permission Denied: Unable to create application record.`);
-            }
             throw e;
         }
     },
 
-    // Save only allowed fields (First/Last Name) + LastUpdated
-    async saveApplication(userId: string, data: Partial<Application>) {
+    // Save Application Form Data
+    async saveApplication(userId: string, formData: Record<string, any>) {
         if (!db) return;
-        console.log("[db-service] saving application for:", userId, data);
+        console.log("[db-service] saving application for:", userId);
 
         const timestamp = new Date().toISOString();
 
-        // Extract only what we want to save
+        // Construct Snapshot from formData
+        // Config ID mapping: 'fullName' -> split? 
+        // User provided: fullName. Let's just store fullName in snapshot if available, or try to split.
+        // Actually, for sorting, firstName/lastName is useful. 
+        // Let's assume the form provides 'fullName' as one string.
+        // We will store it in snapshot as firstName (first word) and lastName (rest), or just add fullName to snapshot?
+        // The DBApplication interface has firstName/lastName. Let's try to parse.
+
+        const fullName = formData['fullName'] || '';
+        const nameParts = fullName.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
         const updates: any = {
             lastUpdatedAt: timestamp,
-            'personalInfo.firstName': data.personalInfo?.firstName,
-            'personalInfo.lastName': data.personalInfo?.lastName,
-            personalInfo: data.personalInfo,
-            essays: data.essays
+            formData: formData,
+            personalInfoSnapshot: {
+                firstName: firstName,
+                lastName: lastName,
+                email: formData['email'],
+                school: formData['school'] || formData['yearOfStudy'] // heuristics
+            }
         };
 
         try {
@@ -172,17 +151,15 @@ export const dbService = {
     },
 
     // Submit: Change status, add submittedAt
-    // Submit: Change status, add submittedAt
     async submitApplication(userId: string) {
         if (!db) return;
         console.log("[db-service] submitting application for:", userId);
         const timestamp = new Date().toISOString();
 
         try {
-            // Change to updateDoc
             const docRef = doc(db, COLLECTION, userId);
             await updateDoc(docRef, {
-                status: 'under_review',
+                status: 'submitted', // Or go directly to under_review if no validation step
                 lastUpdatedAt: timestamp,
                 'timeline.submittedAt': timestamp
             });
@@ -193,15 +170,15 @@ export const dbService = {
         }
     },
 
-    // Dev Tool: Advance Status
-    // Dev Tool: Advance Status
+    // Dev Tools
     async advanceStatus(userId: string, currentStatus: string) {
         if (!db) return;
         let nextStatus = '';
         const updates: any = {};
         const timestamp = new Date().toISOString();
 
-        if (currentStatus === 'under_review') {
+        if (currentStatus === 'submitted') nextStatus = 'under_review';
+        else if (currentStatus === 'under_review') {
             nextStatus = 'decision_released';
             updates['timeline.decisionReleasedAt'] = timestamp;
         } else if (currentStatus === 'decision_released') {
@@ -217,14 +194,9 @@ export const dbService = {
         await updateDoc(doc(db, COLLECTION, userId), updates);
     },
 
-    // Dev Tool: Reset
-    // Dev Tool: Reset
     async resetApplication(userId: string) {
         if (!db) return;
         const timestamp = new Date().toISOString();
-
-        // Reset to draft, specific timeline fields
-
         await updateDoc(doc(db, COLLECTION, userId), {
             status: 'draft',
             lastUpdatedAt: timestamp,
@@ -232,7 +204,7 @@ export const dbService = {
             'timeline.decisionReleasedAt': deleteField(),
             'timeline.enrolledAt': deleteField()
         });
-    }, // Added comma here
+    },
 
     // Admin: Get all applications
     async getAllApplications(): Promise<DBApplication[]> {
@@ -240,7 +212,6 @@ export const dbService = {
         console.log("[db-service] getting all applications");
 
         try {
-            // Retrieve all records. 
             const q = query(collection(db, COLLECTION), orderBy('lastUpdatedAt', 'desc'), limit(1000));
             const querySnapshot = await getDocs(q);
 
@@ -272,27 +243,22 @@ export const dbService = {
         });
     },
 
-    // Admin: Set Internal Decision (does not notify user)
+    // Admin: Set Internal Decision
     async setInternalDecision(userId: string, decision: 'accepted' | 'rejected' | 'waitlisted') {
         if (!db) return;
-
         const timestamp = new Date().toISOString();
         const updates: any = {
             'adminData.internalDecision': decision,
             lastUpdatedAt: timestamp
         };
-
         const docRef = doc(db, COLLECTION, userId);
         await updateDoc(docRef, updates);
     },
 
-    // Admin: Release Result (updates public status)
+    // Admin: Release Result
     async releaseResult(userId: string) {
         if (!db) return;
-
-        // Fetch current doc to get internal decision
         const docRef = doc(db, COLLECTION, userId);
-
         const docSnap = await getDoc(docRef);
         if (!docSnap.exists()) return;
 
@@ -306,8 +272,7 @@ export const dbService = {
         let publicStatus = '';
         const timestamp = new Date().toISOString();
 
-        // Map decision to status
-        if (decision === 'accepted') publicStatus = 'decision_released'; // Accepted -> decision released (Acceptance Letter)
+        if (decision === 'accepted') publicStatus = 'decision_released';
         if (decision === 'rejected') publicStatus = 'rejected';
         if (decision === 'waitlisted') publicStatus = 'waitlisted';
 
@@ -324,7 +289,7 @@ export const dbService = {
     async updateAdminReview(userId: string, data: {
         reviewScore?: number;
         internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
-        note?: string; // Optional new note to append
+        note?: string;
         author?: string;
     }) {
         if (!db) return;
@@ -340,7 +305,6 @@ export const dbService = {
             updates['adminData.internalDecision'] = data.internalDecision;
         }
 
-        // If there's a note, arrayUnion it
         if (data.note && data.author) {
             const newNote = {
                 content: data.note,

@@ -1,16 +1,39 @@
 "use client"
 
-import { useEffect, useState, Suspense } from "react";
-import { useAuth } from "@/lib/auth-context";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { dbService, DBApplication } from "@/lib/db-service";
-import Link from "next/link";
-import { ArrowLeft, Star, Save, Info, User, Mail, Phone, Calendar, Flag } from "lucide-react";
+import { ArrowLeft, User, Mail, School, Calendar, Download, CheckCircle, XCircle, Clock, Star, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { APPLICATION_CONFIG } from "@/lib/config";
+
+// ... (Components like StatusTag can remain or be inline)
+function StatusTag({ status }: { status: string }) {
+    const styles: Record<string, string> = {
+        submitted: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+        under_review: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+        decision_released: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+        accepted: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+        rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+        waitlisted: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        enrolled: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+        draft: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+    };
+    return (
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || styles.draft}`}>
+            {status.replace('_', ' ').toUpperCase()}
+        </span>
+    );
+}
 
 function AdminApplicationDetailContent() {
     const { user, loading: authLoading, isAdmin } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const id = searchParams.get('id');
+
     const [application, setApplication] = useState<DBApplication | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -20,38 +43,34 @@ function AdminApplicationDetailContent() {
     const [reviewNote, setReviewNote] = useState("");
     const [saving, setSaving] = useState(false);
 
-    const searchParams = useSearchParams();
-    const applicationId = searchParams.get('id');
+    useEffect(() => {
+        if (!authLoading && !isAdmin) router.push('/');
+    }, [authLoading, isAdmin, router]);
 
     const fetchApplication = async () => {
-        if (!applicationId) return;
+        if (!id) return;
+        setLoading(true);
         try {
-            const allApps = await dbService.getAllApplications();
-            const found = allApps.find(a => a.userId === applicationId);
-            if (found) {
-                setApplication(found);
+            // Using getMyApplication but strictly passing User ID (which is the doc ID).
+            const data = await dbService.getMyApplication(id);
+            if (data) {
+                setApplication(data);
                 // Init form state
-                setReviewScore(found.adminData?.reviewScore || 0);
-                setInternalDecision(found.adminData?.internalDecision || "");
+                setReviewScore(data.adminData?.reviewScore || 0);
+                setInternalDecision(data.adminData?.internalDecision || "");
             }
         } catch (e) {
-            console.error(e);
+            console.error("Fetch failed", e);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (!authLoading && !isAdmin) {
-            router.push('/');
-            return;
-        }
-        if (isAdmin && applicationId) {
+        if (isAdmin && id) {
             fetchApplication();
-        } else if (isAdmin && !applicationId) {
-            setLoading(false);
         }
-    }, [authLoading, isAdmin, applicationId]);
+    }, [isAdmin, id]);
 
     const handleSaveReview = async () => {
         if (!application || !user?.email) return;
@@ -60,11 +79,11 @@ function AdminApplicationDetailContent() {
             await dbService.updateAdminReview(application.userId, {
                 reviewScore: reviewScore,
                 internalDecision: internalDecision as any,
-                note: reviewNote, // Only if not empty
+                note: reviewNote,
                 author: user.email
             });
-            setReviewNote(""); // Clear note input after save
-            await fetchApplication(); // Refresh data
+            setReviewNote("");
+            await fetchApplication();
             alert("Review saved successfully.");
         } catch (e) {
             console.error("Failed to save review", e);
@@ -74,206 +93,224 @@ function AdminApplicationDetailContent() {
         }
     };
 
-    if (authLoading || (isAdmin && loading)) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
-            </div>
-        );
-    }
+    // Release Result Handler
+    const handleRelease = async () => {
+        if (!application) return;
+        const confirm = window.confirm("Are you sure you want to release the result to the candidate? This will update their public status.");
+        if (!confirm) return;
+        try {
+            await dbService.releaseResult(application.userId);
+            await fetchApplication();
+            alert("Result released!");
+        } catch (e) {
+            console.error("Failed", e);
+            alert("Failed to release.");
+        }
+    };
 
-    if (!application) {
-        return (
-            <div className="p-8">
-                <p>Application not found or no ID provided.</p>
-                <Link href="/admin/dashboard" className="text-blue-600 hover:underline">Back to Dashboard</Link>
-            </div>
-        );
-    }
+    if (loading || !application) return <div className="p-12 text-center">Loading...</div>;
+
+    const formData = application.formData || {};
+    const notes = application.adminData?.notes || [];
 
     return (
         <div className="bg-slate-50 dark:bg-slate-900 min-h-screen flex flex-col font-sans text-slate-700 dark:text-slate-200">
-            {/* Header */}
-            <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-8 sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-slate-800 text-white p-1.5 rounded flex items-center justify-center">
-                            <span className="font-bold text-lg">AP</span>
-                        </div>
-                        <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">Admin Portal</h1>
-                    </div>
-                </div>
-            </header>
 
             <main className="flex-grow p-8">
                 <div className="max-w-7xl mx-auto space-y-8">
                     {/* Breadcrumb & Title */}
-                    <div className="space-y-4">
-                        <Link href="/admin/dashboard" className="inline-flex items-center text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">
-                            <ArrowLeft size={16} className="mr-1" />
-                            Back to Dashboard
-                        </Link>
-                        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                            <div>
-                                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Review Application: {application.personalInfo.firstName} {application.personalInfo.lastName}</h2>
-                                <div className="flex items-center gap-3">
-                                    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800 uppercase">
-                                        {application.status.replace('_', ' ')}
-                                    </span>
-                                    <span className="text-sm text-slate-500 dark:text-slate-400">ID: {application.userId}</span>
-                                </div>
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <button onClick={() => router.back()} className="flex items-center text-sm text-slate-500 hover:text-blue-600 transition-colors mb-2">
+                                <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
+                            </button>
+                            <h2 className="text-3xl font-bold text-slate-900 dark:text-white">
+                                {application.personalInfoSnapshot?.firstName} {application.personalInfoSnapshot?.lastName}
+                            </h2>
+                            <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1"><Mail size={14} /> {application.personalInfoSnapshot?.email || "No Email"}</span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1"><Clock size={14} /> Submitted {application.timeline?.submittedAt ? new Date(application.timeline.submittedAt).toLocaleDateString() : 'N/A'}</span>
+                                <span>•</span>
+                                <StatusTag status={application.status} />
                             </div>
-                            <div className="text-right md:text-right text-sm text-slate-500 dark:text-slate-400">
-                                <p>Registered: <span className="font-medium text-gray-900 dark:text-white">{new Date(application.timeline?.registeredAt || "").toLocaleDateString()}</span></p>
-                                <p>Phone: <span className="font-medium text-gray-900 dark:text-white">{application.personalInfo.phone || "N/A"}</span></p>
-                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            {/* <Button variant="outline"><Download size={16} className="mr-2"/> Download PDF</Button> */}
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Main Content: Info & Essays */}
-                        <div className="lg:col-span-2 space-y-6">
-                            {/* Personal Info */}
-                            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">Personal Information</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
-                                        <p className="text-base text-gray-900 dark:text-white font-medium">{application.personalInfo.firstName} {application.personalInfo.lastName}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">WeChat ID</p>
-                                        <p className="text-base text-gray-900 dark:text-white font-medium">{application.personalInfo.wechatId || "-"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Current School</p>
-                                        <p className="text-base text-gray-900 dark:text-white font-medium">{application.personalInfo.school || "-"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Current Grade</p>
-                                        <p className="text-base text-gray-900 dark:text-white font-medium">{application.personalInfo.grade || "-"}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Interested Subject</p>
-                                        <p className="text-base text-gray-900 dark:text-white font-medium">{application.academicInfo?.subjectGroup || "Not specified"}</p>
-                                    </div>
-                                </div>
-                            </section>
+                        {/* Left Column: Application Data */}
+                        <div className="lg:col-span-2 space-y-8">
 
-                            {/* Essays */}
-                            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6 border-b border-slate-200 dark:border-slate-700 pb-2">Application Essays</h3>
-                                <div className="space-y-6">
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-blue-400 mb-2">Question 1: Explain your interest in the camp.</h4>
-                                        <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                            <p className="whitespace-pre-wrap">{application.essays?.question1 || "No answer provided."}</p>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-blue-400 mb-2">Question 2: Medical / Dietary Needs.</h4>
-                                        <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                            <p className="whitespace-pre-wrap">{application.essays?.question2 || "No answer provided."}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
+                            {/* Dynamic Sections based on Config */}
 
-                        {/* Sidebar: Reviewer Tools */}
-                        <div className="lg:col-span-1 space-y-6">
-                            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden sticky top-24">
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4">
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Reviewer Assessment</h3>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Evaluate the candidate based on the criteria below.</p>
+                            {/* Section: Essays & Basic Info */}
+                            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">Application Responses</h3>
                                 </div>
                                 <div className="p-6 space-y-6">
-                                    {/* Rating */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">Overall Rating</label>
-                                        <div className="flex items-center gap-2 mb-2">
-                                            {[1, 2, 3, 4, 5].map((star) => (
+                                    {APPLICATION_CONFIG.essays.map(field => (
+                                        <div key={field.id} className="space-y-2 border-b border-slate-100 dark:border-slate-700/50 last:border-0 pb-4 last:pb-0">
+                                            <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{field.label}</h4>
+                                            <p className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                                                {formData[field.id] || <span className="text-slate-400 italic">No answer provided</span>}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Section: Academic / Selections */}
+                            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">Academic & Selection</h3>
+                                </div>
+                                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {APPLICATION_CONFIG.selections.map(field => (
+                                        <div key={field.id}>
+                                            <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{field.label}</h4>
+                                            <p className="text-slate-800 dark:text-slate-200">{formData[field.id]}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Section: Preferences */}
+                            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">Program Preferences</h3>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    {APPLICATION_CONFIG.programPreferences.rows.map(row => (
+                                        <div key={row.id} className="flex justify-between border-b last:border-0 pb-2">
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">{row.label}</span>
+                                            <span className="text-slate-900 dark:text-white font-bold">{formData[`pref_${row.id}`] || '-'}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Section: Uploads (Links) */}
+                            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">Documents</h3>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    {APPLICATION_CONFIG.uploads.map(field => (
+                                        <div key={field.id}>
+                                            <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{field.label}</h4>
+                                            {formData[field.id] ? (
+                                                <a href={formData[field.id]} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                                                    {formData[field.id]}
+                                                </a>
+                                            ) : <span className="text-slate-400">Not provided</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                        </div>
+
+                        {/* Right Column: Reviewer Tools */}
+                        <div className="space-y-6">
+                            {/* Assessment Card */}
+                            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden sticky top-24">
+                                <div className="bg-slate-900 text-white px-6 py-4">
+                                    <h3 className="font-bold text-lg">Reviewer Assessment</h3>
+                                </div>
+                                <div className="p-6 space-y-6">
+
+                                    {/* Score */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Overall Rating (1-5)</label>
+                                        <div className="flex gap-2">
+                                            {[1, 2, 3, 4, 5].map(score => (
                                                 <button
-                                                    key={star}
-                                                    onClick={() => setReviewScore(star)}
-                                                    className={`hover:scale-110 transition-transform focus:outline-none ${reviewScore >= star ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}
+                                                    key={score}
+                                                    onClick={() => setReviewScore(score)}
+                                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${reviewScore === score
+                                                            ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
+                                                        }`}
                                                 >
-                                                    <Star size={28} fill={reviewScore >= star ? "currentColor" : "none"} />
+                                                    {score}
                                                 </button>
                                             ))}
-                                            <span className="ml-2 text-sm font-bold text-gray-700 dark:text-gray-300">{reviewScore}/5</span>
                                         </div>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">Click stars to rate.</p>
                                     </div>
 
                                     {/* Decision */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Decision Recommendation</label>
-                                        <select
-                                            value={internalDecision || ""}
-                                            onChange={(e) => setInternalDecision(e.target.value)}
-                                            className="block w-full rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2.5"
-                                        >
-                                            <option value="" disabled>Select decision...</option>
-                                            <option value="accepted">Accept</option>
-                                            <option value="waitlisted">Waitlist</option>
-                                            <option value="rejected">Reject</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Comment */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                            Detailed Comments <span className="text-xs font-normal text-slate-500 ml-1">(Private to admins)</span>
-                                        </label>
-                                        <textarea
-                                            value={reviewNote}
-                                            onChange={(e) => setReviewNote(e.target.value)}
-                                            className="block w-full rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3 placeholder-slate-400"
-                                            rows={6}
-                                            placeholder="Write your assessment here..."
-                                        ></textarea>
-                                    </div>
-
-                                    {/* Current Notes Display (Optional, simplified) */}
-                                    {application.adminData?.notes && application.adminData.notes.length > 0 && (
-                                        <div className="bg-slate-50 p-3 rounded text-xs text-slate-600 space-y-2 max-h-40 overflow-y-auto">
-                                            <p className="font-semibold text-slate-800">Previous Notes:</p>
-                                            {application.adminData.notes.map((n, i) => (
-                                                <div key={i} className="border-b border-slate-200 pb-1 mb-1 last:border-0">
-                                                    <span className="font-bold">{n.author}</span>: {n.content} <br />
-                                                    <span className="text-[10px] text-slate-400">{new Date(n.date).toLocaleDateString()}</span>
-                                                </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Recommendation</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {['accepted', 'waitlisted', 'rejected'].map(decision => (
+                                                <button
+                                                    key={decision}
+                                                    onClick={() => setInternalDecision(decision)}
+                                                    className={`py-2 px-1 rounded-md text-xs font-bold uppercase transition-all ${internalDecision === decision
+                                                            ? (decision === 'accepted' ? 'bg-green-600 text-white' : decision === 'rejected' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white')
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'
+                                                        }`}
+                                                >
+                                                    {decision}
+                                                </button>
                                             ))}
                                         </div>
-                                    )}
+                                    </div>
 
-                                    {/* Actions */}
-                                    <div className="border-t border-slate-200 dark:border-slate-700 pt-6 flex flex-col gap-3">
+                                    {/* Action Button: Save Review */}
+                                    <Button onClick={handleSaveReview} disabled={saving} className="w-full">
+                                        {saving ? 'Saving...' : 'Save Review'}
+                                    </Button>
+
+                                    <div className="border-t border-slate-200 dark:border-slate-700 my-4"></div>
+
+                                    {/* Release Button */}
+                                    <div className="bg-slate-50 dark:bg-slate-900 rounded p-4 border border-slate-200 dark:border-slate-700">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Final Action</h4>
+                                        <p className="text-xs text-slate-500 mb-3">
+                                            Releasing the results will update the candidate's public status based on your recommendation.
+                                        </p>
                                         <Button
-                                            onClick={handleSaveReview}
-                                            disabled={saving}
-                                            className="w-full flex justify-center items-center font-medium"
+                                            variant="secondary"
+                                            className="w-full text-xs"
+                                            onClick={handleRelease}
+                                            disabled={!internalDecision || saving}
                                         >
-                                            <Save size={16} className="mr-2" />
-                                            Save Review
+                                            Release Result
                                         </Button>
                                     </div>
+
+                                    {/* Notes History */}
+                                    <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            <MessageSquare size={16} /> Internal Notes
+                                        </h4>
+                                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                            {notes.map((note, i) => (
+                                                <div key={i} className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded text-sm space-y-1">
+                                                    <p className="text-slate-800 dark:text-slate-200">{note.content}</p>
+                                                    <div className="text-xs text-slate-400 flex justify-between">
+                                                        <span>{note.author}</span>
+                                                        <span>{new Date(note.date).toLocaleDateString()}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {notes.length === 0 && <p className="text-xs text-slate-400 italic">No notes yet.</p>}
+                                        </div>
+                                        <Textarea
+                                            placeholder="Add a new note..."
+                                            value={reviewNote}
+                                            onChange={(e) => setReviewNote(e.target.value)}
+                                            className="text-sm min-h-[80px]"
+                                        />
+                                    </div>
+
                                 </div>
                             </div>
-
-                            {/* Pending box */}
-                            {!application.adminData?.internalDecision && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex">
-                                    <Info size={20} className="text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
-                                    <div className="ml-3">
-                                        <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Pending Decision</h3>
-                                        <div className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                                            <p>This application has not been marked with a decision yet.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>

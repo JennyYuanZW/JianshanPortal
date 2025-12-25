@@ -14,23 +14,22 @@ export interface Application {
   status: 'draft' | 'submitted' | 'under_review' | 'decision_released' | 'enrolled' | 'rejected' | 'waitlisted';
   submittedAt?: string; // ISO Date
   lastUpdatedAt: string; // ISO Date
-  // Form Data (simplified for now)
-  personalInfo: {
+
+  // New Config-Driven Structure
+  formData: Record<string, any>;
+  personalInfoSnapshot: {
     firstName: string;
     lastName: string;
-    phone: string;
-    wechatId?: string;
-    school: string;
-    grade: string;
+    email?: string;
+    school?: string;
+    grade?: string;
   };
-  academicInfo?: {
-    subjectGroup?: string;
-  };
+
+  // Deprecated fields (kept optional for backward compat if needed, but preferably unused)
+  personalInfo?: any;
+  academicInfo?: any;
   availability?: string[];
-  essays: {
-    question1: string;
-    question2: string;
-  };
+  essays?: any;
 }
 
 // Helpers

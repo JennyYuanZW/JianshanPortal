@@ -3,64 +3,47 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Application } from "@/lib/mock-api"; // Keeping type definition
-import { dbService } from "@/lib/db-service";
+import { dbService, DBApplication } from "@/lib/db-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
-import { Loader2, ArrowRight, Save, Tent, User, GraduationCap, FileText, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, ArrowRight, Save, CheckCircle2 } from "lucide-react";
+import { APPLICATION_CONFIG } from "@/lib/config";
+// import { cn } from "@/lib/utils"; // Not used currently
 
 export default function ApplyPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [app, setApp] = useState<Application | null>(null);
+    const [app, setApp] = useState<DBApplication | null>(null);
 
-    // Status check
+    // Initial Load
     useEffect(() => {
         if (!authLoading && !user) {
             router.push("/login");
         }
     }, [authLoading, user, router]);
 
-    // Load Data
     useEffect(() => {
         const fetchApp = async () => {
             if (!user) return;
-            // Standardize ID usage. CloudBase 'user' typically has 'uid'.
-            // Fallback to 'id' or '_id' if needed, but 'uid' is best for consistency with auth.
-            const uid = user.uid; // Ensure we get a valid string
-
+            const uid = user.uid;
             console.log("Fetching application for user:", uid);
 
             try {
-                // Use cloud DB service
-                // This now THROWS on permission error, and returns NULL on clean "not found".
                 let myApp = await dbService.getMyApplication(uid);
-
                 if (!myApp) {
                     console.log("No application found. Creating new draft for:", uid);
-                    // createApplication uses .set(id), so it is idempotent.
-                    // If two requests hit this, they write the same data to the same ID. No duplicates.
                     myApp = await dbService.createApplication(uid);
-                    console.log("Created new application:", myApp);
-                } else {
-                    console.log("Found existing application:", myApp);
                 }
                 setApp(myApp);
             } catch (err: any) {
                 console.error("Error fetching/creating application:", err);
-                // If permission denied, explicit alert
-                // If permission denied, explicit alert
-                if (err.message && err.message.includes('CloudBase Permission Denied')) {
-                    alert("Account Setup Error: Database permission denied. Please contact the administrator.");
-                } else if (err.code === 'DATABASE_PERMISSION_DENIED') {
+                if (err.message?.includes('Permission Denied') || err.code === 'permission-denied') {
                     alert("Database Permission Denied. Please contact administrator.");
                 } else {
                     alert("Failed to load application. " + (err.message || "Unknown error"));
@@ -69,59 +52,34 @@ export default function ApplyPage() {
                 setLoading(false);
             }
         };
-        fetchApp(); // Don't wait for 'if (user)' inside effect, check inside func but trigger on [user]
+        fetchApp();
     }, [user]);
 
-    // Handle Input Change (Deep update helper)
-    const handleChange = (section: keyof Application | string, field: string, value: string | string[]) => {
+    // Update Form Data Helper
+    const handleFieldChange = (fieldId: string, value: any) => {
         if (!app) return;
-
         setApp(prev => {
             if (!prev) return null;
-
-            // Handle nested objects
-            if (section === 'personalInfo' || section === 'essays' || section === 'academicInfo') {
-                return {
-                    ...prev,
-                    [section]: {
-                        ...prev[section as 'personalInfo' | 'essays' | 'academicInfo'] || {},
-                        [field]: value
-                    }
+            return {
+                ...prev,
+                formData: {
+                    ...prev.formData,
+                    [fieldId]: value
                 }
-            }
-            // Handle top-level fields (like availability)
-            if (section === 'root') {
-                return {
-                    ...prev,
-                    [field]: value
-                }
-            }
-
-            return prev;
+            };
         });
-    };
-
-    const toggleAvailability = (session: string) => {
-        if (!app) return;
-        const current = app.availability || [];
-        const newAvailability = current.includes(session)
-            ? current.filter(s => s !== session)
-            : [...current, session];
-        handleChange('root', 'availability', newAvailability);
     };
 
     const handleSave = async () => {
         if (!user || !app) return;
-        const uid = user.uid;
-        console.log("Saving draft for:", uid);
         setSaving(true);
         try {
-            await dbService.saveApplication(uid, app);
+            await dbService.saveApplication(user.uid, app.formData);
             console.log("Draft saved successfully");
-            router.push("/dashboard");
+            // Optional: Show toast
         } catch (err) {
             console.error("Failed to save draft:", err);
-            alert("Failed to save draft. Please try again.");
+            alert("Failed to save draft.");
         } finally {
             setSaving(false);
         }
@@ -130,19 +88,27 @@ export default function ApplyPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !app) return;
-        const uid = user.uid;
-        console.log("Submitting application for:", uid);
+
+        // Basic Validation could go here based on config (check required fields)
+        const missing = [];
+        // Example: Check essays
+        for (const q of APPLICATION_CONFIG.essays) {
+            if (!app.formData[q.id]) missing.push(q.label);
+        }
+        if (missing.length > 0) {
+            const confirm = window.confirm(`You have empty fields: ${missing.join(', ')}. Submit anyway? (Dev Mode: normally would block)`);
+            if (!confirm) return;
+        }
+
         setSaving(true);
         try {
-            // Perform validation here if needed
-            // Also ensure latest data is saved before submit status change
-            await dbService.saveApplication(uid, app);
-            await dbService.submitApplication(uid);
-            console.log("Application submitted successfully");
-            router.push("/dashboard");
+            await dbService.saveApplication(user.uid, app.formData);
+            await dbService.submitApplication(user.uid);
+            alert("Application submitted successfully!");
+            router.push("/dashboard"); // Or stay and show success state
         } catch (err) {
-            console.error("Failed to submit application:", err);
-            alert("Failed to submit application. Please try again or contact support.");
+            console.error("Failed to submit:", err);
+            alert("Failed to submit application.");
         } finally {
             setSaving(false);
         }
@@ -157,242 +123,230 @@ export default function ApplyPage() {
     }
 
     const isReadonly = app.status !== 'draft';
+    const formData = app.formData || {};
 
     return (
-        <div className="min-h-screen bg-background">
-            {/* Header logic is in main Navbar, but we add a sub-header context if needed, 
-          though the design has a unified header. We'll stick to the page content. */}
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-12 px-4 sm:px-6 lg:px-8 font-sans">
+            <div className="max-w-4xl mx-auto space-y-8">
 
-            <div className="flex flex-1 justify-center py-8 px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-col w-full max-w-5xl gap-6">
-
-                    {/* Breadcrumb */}
-                    <nav className="flex items-center text-sm font-medium">
-                        <span className="text-muted-foreground hover:text-primary transition-colors cursor-pointer" onClick={() => router.push('/dashboard')}>Dashboard</span>
-                        <span className="mx-2 text-muted-foreground">/</span>
-                        <span className="text-primary font-semibold">Application Form</span>
+                {/* Header Section */}
+                <div>
+                    <nav className="flex items-center text-sm font-medium mb-4">
+                        <span className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer" onClick={() => router.push('/dashboard')}>Dashboard</span>
+                        <span className="mx-2 text-slate-300">/</span>
+                        <span className="text-blue-600 dark:text-blue-400 font-semibold">Application Form</span>
                     </nav>
+                    <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Student Application</h1>
+                    <p className="mt-2 text-lg text-slate-600 dark:text-slate-300">Please complete all sections below.</p>
 
-                    <div className="flex flex-col gap-2">
-                        <h2 className="text-3xl sm:text-4xl font-black leading-tight tracking-tight text-primary">
-                            Student Application
-                        </h2>
-                        <p className="text-muted-foreground text-lg">
-                            Please fill out the details below to register for the upcoming summer session.
-                        </p>
-                        {isReadonly && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 p-4 rounded-lg flex items-center gap-2 mt-2">
-                                <CheckCircle2 className="h-5 w-5" />
-                                <span className="font-medium">Application Submitted. Status: {app.status}</span>
+                    {isReadonly && (
+                        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 p-4 rounded-lg flex items-center gap-3 mt-4">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <span className="font-medium">Application Submitted. Status: <span className="uppercase">{app.status.replace('_', ' ')}</span></span>
+                        </div>
+                    )}
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-8">
+
+                    {/* 1. Essays / Open-Ended Questions */}
+                    <div className="bg-white dark:bg-slate-800 shadow rounded-xl p-6 md:p-8 space-y-6">
+                        <div className="border-b border-slate-100 dark:border-slate-700 pb-4 mb-4">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">General Information & Essays</h2>
+                        </div>
+                        <div className="grid grid-cols-1 gap-6">
+                            {APPLICATION_CONFIG.essays.map((field) => (
+                                <div key={field.id} className="space-y-2">
+                                    <Label htmlFor={field.id} className="text-base font-semibold text-slate-800 dark:text-slate-200">
+                                        {field.label}
+                                    </Label>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">{field.prompt}</p>
+
+                                    {/* Heuristic: If placeholder implies long text or field ID implies "outline"/"interest", use Textarea */}
+                                    {(field.id.toLowerCase().includes('outline') || field.id.toLowerCase().includes('interest') || field.id.toLowerCase().includes('comments') || field.id.toLowerCase().includes('session')) ? (
+                                        <Textarea
+                                            id={field.id}
+                                            placeholder={field.placeholder}
+                                            value={formData[field.id] || ''}
+                                            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                                            disabled={isReadonly}
+                                            className="min-h-[120px]"
+                                        />
+                                    ) : (
+                                        <Input
+                                            id={field.id}
+                                            placeholder={field.placeholder}
+                                            value={formData[field.id] || ''}
+                                            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                                            disabled={isReadonly}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 2. Selections */}
+                    <div className="bg-white dark:bg-slate-800 shadow rounded-xl p-6 md:p-8 space-y-6">
+                        <div className="border-b border-slate-100 dark:border-slate-700 pb-4 mb-4">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Academic Details</h2>
+                            {/* Multiple Choice Selections */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {APPLICATION_CONFIG.selections.map((field) => (
+                                    <div key={field.id} className="space-y-2">
+                                        <Label htmlFor={field.id} className="text-slate-700 dark:text-slate-200">
+                                            {field.label}
+                                        </Label>
+                                        <Select
+                                            value={formData[field.id] || ""}
+                                            onValueChange={(val) => handleFieldChange(field.id, val)}
+                                            disabled={isReadonly}
+                                        >
+                                            <SelectTrigger id={field.id} className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                                                <SelectValue placeholder="Select an option" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {field.options.map((opt) => (
+                                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                ))}
                             </div>
+
+                            {/* Multi-Select Checkboxes (e.g. Availability) */}
+                            {APPLICATION_CONFIG.multiSelections?.map((section) => (
+                                <div key={section.id} className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <h3 className="font-semibold text-slate-800 dark:text-white">{section.label}</h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {section.options.map((option) => (
+                                            <div key={option} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={`${section.id}-${option}`}
+                                                    checked={(formData[section.id] || []).includes(option)}
+                                                    onCheckedChange={(checked) => {
+                                                        if (isReadonly) return;
+                                                        const current = formData[section.id] || [];
+                                                        let updated;
+                                                        if (checked) {
+                                                            updated = [...current, option];
+                                                        } else {
+                                                            updated = current.filter((i: string) => i !== option);
+                                                        }
+                                                        handleFieldChange(section.id, updated);
+                                                    }}
+                                                    disabled={isReadonly}
+                                                />
+                                                <label
+                                                    htmlFor={`${section.id}-${option}`}
+                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                                >
+                                                    {option}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 3. Program Preferences (Grid) */}
+                    <div className="bg-white dark:bg-slate-800 shadow rounded-xl p-6 md:p-8 space-y-6">
+                        <div className="border-b border-slate-100 dark:border-slate-700 pb-4 mb-4">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Program Preferences</h2>
+                        </div>
+                        <div className="space-y-4">
+                            <Label className="text-base">{APPLICATION_CONFIG.programPreferences.label}</Label>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                                    <thead>
+                                        <tr>
+                                            <th className="px-4 py-2 text-left text-sm font-medium text-slate-500">Option</th>
+                                            {APPLICATION_CONFIG.programPreferences.options.map(opt => (
+                                                <th key={opt} className="px-4 py-2 text-center text-sm font-medium text-slate-500">{opt}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                                        {APPLICATION_CONFIG.programPreferences.rows.map(row => (
+                                            <tr key={row.id}>
+                                                <td className="px-4 py-4 text-sm font-medium text-slate-900 dark:text-white">{row.label}</td>
+                                                {APPLICATION_CONFIG.programPreferences.options.map(opt => {
+                                                    const fieldKey = `pref_${row.id}`;
+                                                    const isChecked = formData[fieldKey] === opt;
+                                                    return (
+                                                        <td key={opt} className="px-4 py-4 text-center">
+                                                            <div className="flex justify-center">
+                                                                <input
+                                                                    type="radio"
+                                                                    name={fieldKey}
+                                                                    checked={isChecked}
+                                                                    onChange={() => handleFieldChange(fieldKey, opt)}
+                                                                    disabled={isReadonly}
+                                                                    className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 4. Uploads */}
+                    <div className="bg-white dark:bg-slate-800 shadow rounded-xl p-6 md:p-8 space-y-6">
+                        <div className="border-b border-slate-100 dark:border-slate-700 pb-4 mb-4">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Document Uploads</h2>
+                        </div>
+                        <div className="grid grid-cols-1 gap-6">
+                            {APPLICATION_CONFIG.uploads.map((field) => (
+                                <div key={field.id} className="space-y-2">
+                                    <Label htmlFor={field.id}>{field.label}</Label>
+                                    <p className="text-sm text-slate-500 mb-2">{field.prompt}</p>
+                                    {/* Mock File Input - actually just stores text/link for now as no storage backend is ready */}
+                                    <Input
+                                        id={field.id}
+                                        placeholder="Paste link to document (Google Drive, Dropbox, etc.)"
+                                        value={formData[field.id] || ''}
+                                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                                        disabled={isReadonly}
+                                    />
+                                    {/* 
+                                     <Input type="file" disabled={true} />
+                                     <p className="text-xs text-amber-600">File upload is currently disabled. Please provide a link above.</p>
+                                    */}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-end gap-4 pt-6">
+                        {!isReadonly && (
+                            <>
+                                <Button type="button" variant="outline" onClick={handleSave} disabled={saving}>
+                                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                    Save Draft
+                                </Button>
+                                <Button type="submit" disabled={saving}>
+                                    Submit Application
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </>
+                        )}
+                        {isReadonly && (
+                            <Button type="button" variant="outline" onClick={() => router.push('/dashboard')}>
+                                Back to Dashboard
+                            </Button>
                         )}
                     </div>
-
-                    <div className="flex flex-col rounded-xl bg-card border shadow-sm overflow-hidden">
-                        {/* Progress Bar Visual (Static for now or calculated) */}
-                        <div className="h-1.5 w-full bg-muted">
-                            <div className="h-full w-2/3 bg-accent rounded-r-full shadow-sm"></div>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="flex flex-col">
-
-                            {/* Section 1: Personal Info */}
-                            <div className="p-6 md:p-8 border-b">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-primary-foreground font-bold text-sm shadow-md">1</span>
-                                    <h3 className="text-xl font-bold text-foreground">Personal Information</h3>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="grid gap-2">
-                                        <Label>First Name</Label>
-                                        <Input
-                                            value={app.personalInfo.firstName}
-                                            onChange={(e) => handleChange('personalInfo', 'firstName', e.target.value)}
-                                            placeholder="Enter first name"
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>Last Name</Label>
-                                        <Input
-                                            value={app.personalInfo.lastName}
-                                            onChange={(e) => handleChange('personalInfo', 'lastName', e.target.value)}
-                                            placeholder="Enter last name"
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>Phone Number</Label>
-                                        <Input
-                                            value={app.personalInfo.phone}
-                                            onChange={(e) => handleChange('personalInfo', 'phone', e.target.value)}
-                                            placeholder="+86 ..."
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>WeChat ID</Label>
-                                        <Input
-                                            value={app.personalInfo.wechatId || ''}
-                                            onChange={(e) => handleChange('personalInfo', 'wechatId', e.target.value)}
-                                            placeholder="WeChat ID"
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Section 2: Education (Merged logic for simplicity given mock data structure) */}
-                            <div className="p-6 md:p-8 border-b">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-primary-foreground font-bold text-sm shadow-md">2</span>
-                                    <h3 className="text-xl font-bold text-foreground">Educational Background</h3>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="grid gap-2 md:col-span-2">
-                                        <Label>Current School</Label>
-                                        <Input
-                                            value={app.personalInfo.school}
-                                            onChange={(e) => handleChange('personalInfo', 'school', e.target.value)}
-                                            placeholder="Enter school name"
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>Grade / Level</Label>
-                                        <Select
-                                            disabled={isReadonly}
-                                            value={app.personalInfo.grade}
-                                            onValueChange={(val) => handleChange('personalInfo', 'grade', val)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select grade" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Grade 9">Grade 9</SelectItem>
-                                                <SelectItem value="Grade 10">Grade 10</SelectItem>
-                                                <SelectItem value="Grade 11">Grade 11</SelectItem>
-                                                <SelectItem value="Grade 12">Grade 12</SelectItem>
-                                                <SelectItem value="Other">Other</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>Subject Interest</Label>
-                                        <Select
-                                            disabled={isReadonly}
-                                            value={app.academicInfo?.subjectGroup || ''}
-                                            onValueChange={(val) => handleChange('academicInfo', 'subjectGroup', val)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select primary interest" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Computer Science">Computer Science</SelectItem>
-                                                <SelectItem value="Mathematics">Mathematics</SelectItem>
-                                                <SelectItem value="Physics">Physics</SelectItem>
-                                                <SelectItem value="Biology">Biology</SelectItem>
-                                                <SelectItem value="Chemistry">Chemistry</SelectItem>
-                                                <SelectItem value="Economics">Economics</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="grid gap-2 md:col-span-2">
-                                        <Label className="mb-2 block">Camp Session Availability (Select all that apply)</Label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            {['June Session', 'July Session', 'August Session', 'Flexible'].map((session) => (
-                                                <div key={session} className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 transition-colors">
-                                                    <Checkbox
-                                                        id={session}
-                                                        checked={(app.availability || []).includes(session)}
-                                                        onCheckedChange={() => toggleAvailability(session)}
-                                                        disabled={isReadonly}
-                                                    />
-                                                    <label
-                                                        htmlFor={session}
-                                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer w-full h-full flex items-center"
-                                                    >
-                                                        {session}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Section 3: Essays */}
-                            <div className="p-6 md:p-8 bg-primary/5 dark:bg-primary/10">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-primary-foreground font-bold text-sm shadow-md">3</span>
-                                    <h3 className="text-xl font-bold text-foreground">Camp Specifics</h3>
-                                </div>
-                                <div className="grid grid-cols-1 gap-6">
-                                    <div className="grid gap-2">
-                                        <Label>Why do you want to join Jianshan Summer Camp?</Label>
-                                        <Textarea
-                                            className="h-32 resize-none bg-background"
-                                            placeholder="Tell us about your interests and goals..."
-                                            value={app.essays.question1}
-                                            onChange={(e) => handleChange('essays', 'question1', e.target.value)}
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>Medical Conditions or Dietary Restrictions</Label>
-                                        <Textarea
-                                            className="h-24 resize-none bg-background"
-                                            placeholder="Please list any allergies, medications, or dietary needs..."
-                                            value={app.essays.question2}
-                                            onChange={(e) => handleChange('essays', 'question2', e.target.value)}
-                                            disabled={isReadonly}
-                                        />
-                                    </div>
-
-                                    <div className="flex items-start gap-3 mt-2">
-                                        <Checkbox id="terms" disabled={isReadonly} />
-                                        <Label htmlFor="terms" className="text-sm text-muted-foreground font-normal leading-normal">
-                                            I agree to the <a href="#" className="text-primary font-bold hover:text-accent hover:underline">Terms and Conditions</a> and confirm that all information provided is accurate.
-                                        </Label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Footer Actions */}
-                            <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 p-6 md:px-8 md:py-6 bg-card border-t sticky bottom-0 z-10">
-                                {isReadonly ? (
-                                    <div className="text-muted-foreground text-sm">Application is {app.status}. Modifications are locked.</div>
-                                ) : (
-                                    <>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={handleSave}
-                                            disabled={saving}
-                                            className="w-full sm:w-auto bg-slate-100 text-slate-600 border-2 border-slate-200 font-bold hover:bg-slate-200 hover:text-slate-800 hover:border-slate-300"
-                                        >
-                                            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Save Draft
-                                        </Button>
-                                        <div className="flex items-center gap-4 w-full sm:w-auto">
-                                            <span className="text-xs font-medium text-muted-foreground hidden sm:block">
-                                                Last saved {new Date(app.lastUpdatedAt).toLocaleTimeString()}
-                                            </span>
-                                            <Button
-                                                type="submit"
-                                                disabled={saving}
-                                                className="w-full sm:w-auto font-bold gap-2"
-                                            >
-                                                Submit Application
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                </form>
             </div>
         </div>
     );
