@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { mockApi, Application } from "@/lib/mock-api";
-import { dbService } from "@/lib/db-service";
+import { dbService, DBApplication } from "@/lib/db-service";
 import { Button } from "@/components/ui/button";
 import { Check, Clock, FileText, Calendar, Mail, Loader2, ArrowRight, CreditCard, Download, Flag, PenTool, User, Eye, FilePen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Components ---
 
-function ProgressTimeline({ status }: { status: Application['status'] }) {
+function ProgressTimeline({ status }: { status: DBApplication['status'] }) {
     // Current Logic:
     // Registration: Always Check
     // Application Submitted: Check if submitted+, else Future
@@ -218,7 +217,7 @@ function ProgressTimeline({ status }: { status: Application['status'] }) {
 }
 
 
-function ApplicationDetails({ app, user }: { app: Application, user: any }) {
+function ApplicationDetails({ app, user }: { app: DBApplication, user: any }) {
     return (
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="p-4 border-b bg-[#F9FAFC]">
@@ -237,7 +236,7 @@ function ApplicationDetails({ app, user }: { app: Application, user: any }) {
                     <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
                         <p className="text-xs uppercase font-bold text-muted-foreground">Application ID</p>
-                        <p className="text-sm font-medium">#{app.id.slice(0, 8).toUpperCase()}</p>
+                        <p className="text-sm font-medium">#{app.userId.slice(0, 8).toUpperCase()}</p>
                     </div>
                 </div>
                 <div className="h-px bg-border w-full"></div>
@@ -245,7 +244,7 @@ function ApplicationDetails({ app, user }: { app: Application, user: any }) {
                     <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
                         <p className="text-xs uppercase font-bold text-muted-foreground">Submission Date</p>
-                        <p className="text-sm font-medium">{app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : 'N/A'}</p>
+                        <p className="text-sm font-medium">{app.timeline?.submittedAt ? new Date(app.timeline.submittedAt).toLocaleDateString() : 'N/A'}</p>
                     </div>
                 </div>
             </div>
@@ -273,7 +272,7 @@ function ApplicationDetails({ app, user }: { app: Application, user: any }) {
 export default function DashboardPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
-    const [app, setApp] = useState<Application | null>(null);
+    const [app, setApp] = useState<DBApplication | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Initial auth check
