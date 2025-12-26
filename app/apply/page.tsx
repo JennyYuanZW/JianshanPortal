@@ -215,40 +215,7 @@ export default function ApplyPage() {
                                 ))}
                             </div>
 
-                            {/* Multi-Select Checkboxes (e.g. Availability) */}
-                            {APPLICATION_CONFIG.multiSelections?.map((section) => (
-                                <div key={section.id} className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <h3 className="font-semibold text-slate-800 dark:text-white">{section.label}</h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {section.options.map((option) => (
-                                            <div key={option} className="flex items-center space-x-2">
-                                                <Checkbox
-                                                    id={`${section.id}-${option}`}
-                                                    checked={(formData[section.id] || []).includes(option)}
-                                                    onCheckedChange={(checked) => {
-                                                        if (isReadonly) return;
-                                                        const current = formData[section.id] || [];
-                                                        let updated;
-                                                        if (checked) {
-                                                            updated = [...current, option];
-                                                        } else {
-                                                            updated = current.filter((i: string) => i !== option);
-                                                        }
-                                                        handleFieldChange(section.id, updated);
-                                                    }}
-                                                    disabled={isReadonly}
-                                                />
-                                                <label
-                                                    htmlFor={`${section.id}-${option}`}
-                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                                                >
-                                                    {option}
-                                                </label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+
                         </div>
                     </div>
 

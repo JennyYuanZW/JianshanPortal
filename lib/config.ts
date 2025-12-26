@@ -122,15 +122,6 @@ export const APPLICATION_CONFIG = {
         }
     ],
 
-    // Multi-Select Checkboxes
-    multiSelections: [
-        {
-            id: 'availability',
-            label: 'Camp Session Availability',
-            options: ['June Session', 'July Session', 'August Session', 'Flexible']
-        }
-    ],
-
     // Program Preference Grid
     programPreferences: {
         label: 'Which program would you like to sign up for?',

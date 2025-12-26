@@ -48,8 +48,18 @@ export interface DBApplication {
 
     // Admin specific data
     adminData?: {
+        stage?: 'first_round' | 'second_round'; // New field for review stage
         internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
         campAllocation?: string; // e.g. "Camp Alpha"
+        reviews?: Array<{
+            score: number;
+            decision: string; // 'accepted' | 'rejected' | 'waitlisted' | 'second_round'
+            comment: string;
+            author: string;
+            date: string;
+            flagged?: boolean;
+            flagReason?: string;
+        }>;
         reviewScore?: number; // 0-5
         reviewStatus?: 'reviewed' | 'pending';
         notes?: Array<{
@@ -286,11 +296,14 @@ export const dbService = {
     },
 
     // Admin: Save Comprehensive Review (Score, Decision, Comment)
+    // Now pushes to reviews array
     async updateAdminReview(userId: string, data: {
         reviewScore?: number;
-        internalDecision?: 'accepted' | 'rejected' | 'waitlisted' | null;
+        decision?: string; // Changed from internalDecision to generic decision for this review
         note?: string;
         author?: string;
+        flagged?: boolean;
+        flagReason?: string;
     }) {
         if (!db) return;
         const timestamp = new Date().toISOString();
@@ -298,23 +311,33 @@ export const dbService = {
             lastUpdatedAt: timestamp
         };
 
-        if (data.reviewScore !== undefined) {
-            updates['adminData.reviewScore'] = data.reviewScore;
-        }
-        if (data.internalDecision !== undefined) {
-            updates['adminData.internalDecision'] = data.internalDecision;
+        // If we have a full review (score + decision + comment), add to reviews array
+        if (data.author && (data.reviewScore !== undefined || data.decision || data.note)) {
+            const newReview = {
+                score: data.reviewScore || 0,
+                decision: data.decision || 'undecided',
+                comment: data.note || '',
+                author: data.author,
+                date: timestamp,
+                flagged: data.flagged || false,
+                flagReason: data.flagReason || ''
+            };
+            updates['adminData.reviews'] = arrayUnion(newReview);
+
+            // Update top-level legacy score for easier sorting/filtering if needed
+            // Or calculates average? For now, we might leave the "last" score or just ignore.
+            // Let's update reviewScore to the latest one for the dashboard sort
+            if (data.reviewScore) {
+                updates['adminData.reviewScore'] = data.reviewScore;
+            }
         }
 
-        if (data.note && data.author) {
-            const newNote = {
-                content: data.note,
-                author: data.author,
-                date: timestamp
-            };
-            updates['adminData.notes'] = arrayUnion(newNote);
-        }
+        // internalDecision is separate (the final verdict), usually set by setInternalDecision
+        // But if this "review" is meant to set the final verdict, we'd use setInternalDecision.
+        // Assuming this function is for INDIVIDUAL reviews.
 
         const docRef = doc(db, COLLECTION, userId);
         await updateDoc(docRef, updates);
     }
 };
+

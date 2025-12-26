@@ -78,7 +78,7 @@ function AdminApplicationDetailContent() {
         try {
             await dbService.updateAdminReview(application.userId, {
                 reviewScore: reviewScore,
-                internalDecision: internalDecision as any,
+                decision: internalDecision as any,
                 note: reviewNote,
                 author: user.email
             });
@@ -232,8 +232,8 @@ function AdminApplicationDetailContent() {
                                                     key={score}
                                                     onClick={() => setReviewScore(score)}
                                                     className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${reviewScore === score
-                                                            ? 'bg-blue-600 text-white ring-2 ring-blue-300'
-                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
+                                                        ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
                                                         }`}
                                                 >
                                                     {score}
@@ -251,8 +251,8 @@ function AdminApplicationDetailContent() {
                                                     key={decision}
                                                     onClick={() => setInternalDecision(decision)}
                                                     className={`py-2 px-1 rounded-md text-xs font-bold uppercase transition-all ${internalDecision === decision
-                                                            ? (decision === 'accepted' ? 'bg-green-600 text-white' : decision === 'rejected' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white')
-                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'
+                                                        ? (decision === 'accepted' ? 'bg-green-600 text-white' : decision === 'rejected' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white')
+                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'
                                                         }`}
                                                 >
                                                     {decision}

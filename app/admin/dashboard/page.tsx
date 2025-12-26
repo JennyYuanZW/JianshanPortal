@@ -175,11 +175,6 @@ export default function AdminDashboardPage() {
                                     options={["All Subjects", "Computer Science", "Mathematics", "Physics", "Biology", "Chemistry", "Economics"]}
                                 />
                                 <FilterSelect
-                                    value={availabilityFilter}
-                                    onChange={setAvailabilityFilter}
-                                    options={["All Availabilities", "June Session", "July Session", "August Session", "Flexible"]}
-                                />
-                                <FilterSelect
                                     value={allocationFilter}
                                     onChange={setAllocationFilter}
                                     options={["All Allocations", "Unallocated", "Camp Alpha", "Camp Beta", "Camp Gamma"]}
@@ -199,7 +194,7 @@ export default function AdminDashboardPage() {
                             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                                 <thead className="bg-gray-50 dark:bg-gray-800/50">
                                     <tr>
-                                        {["Candidate", "Subject Group", "Camp Availability", "Camp Allocation", "Score", "Review", "Status", "Actions"].map((head) => (
+                                        {["Candidate", "Stage", "Status", "Avg Score", "Camp Availability", "Camp Allocation", "My Review", "Actions"].map((head) => (
                                             <th key={head} className="px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider" scope="col">
                                                 {head}
                                             </th>
@@ -207,84 +202,106 @@ export default function AdminDashboardPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-                                    {filteredApps.map((app) => (
-                                        <tr key={app.userId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                            {/* Candidate */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center font-bold text-sm">
-                                                        {(app.personalInfoSnapshot?.firstName || "?")[0]}{(app.personalInfoSnapshot?.lastName || "?")[0]}
-                                                    </div>
-                                                    <div className="ml-4">
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{app.personalInfoSnapshot?.firstName} {app.personalInfoSnapshot?.lastName}</div>
-                                                        <div className="text-xs text-slate-500 dark:text-slate-400">ID: {app.userId.slice(0, 8)}...</div>
-                                                    </div>
-                                                </div>
-                                            </td>
+                                    {filteredApps.map((app) => {
+                                        // Helper: Avg Score
+                                        const reviews = app.adminData?.reviews || [];
+                                        const avgScore = reviews.length > 0
+                                            ? (reviews.reduce((sum, r) => sum + (r.score || 0), 0) / reviews.length).toFixed(1)
+                                            : "-";
 
-                                            {/* Subject */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">{app.formData?.subjectGroup || "-"}</span>
-                                            </td>
+                                        // Helper: Availability
+                                        const prefs = app.formData?.programPreferences || {};
+                                        const availString = Object.entries(prefs)
+                                            .filter(([k, v]) => k !== 'label' && k !== 'options' && (v === 'First Preference' || v === 'Second Preference'))
+                                            .map(([city, pref]) => `${city} (${pref === 'First Preference' ? '1st' : '2nd'})`)
+                                            .join(', ') || 'None';
 
-                                            {/* Availability */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex flex-col text-sm text-gray-600 dark:text-gray-400">
-                                                    {(app.formData?.availability && Array.isArray(app.formData.availability) && app.formData.availability.length > 0) ? (
-                                                        app.formData.availability.map((s: string) => (
-                                                            <div key={s} className="flex items-center">
-                                                                <Calendar size={14} className="mr-1 text-slate-400" />
-                                                                {s}
+                                        return (
+                                            <tr key={app.userId} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                {/* 1. Candidate Name */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                                                            {app.personalInfoSnapshot?.firstName?.[0] || "?"}
+                                                        </div>
+                                                        <div className="ml-4">
+                                                            <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                                                {app.personalInfoSnapshot?.firstName} {app.personalInfoSnapshot?.lastName}
                                                             </div>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-slate-400 italic">Not set</span>
-                                                    )}
-                                                </div>
-                                            </td>
+                                                            <div className="text-sm text-slate-500 dark:text-slate-400">
+                                                                {app.userId}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
 
-                                            {/* Allocation */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {app.adminData?.campAllocation ? (
-                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                                                        {app.adminData.campAllocation}
+                                                {/* 2. Stage */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${app.adminData?.stage === 'second_round'
+                                                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                                        }`}>
+                                                        {app.adminData?.stage === 'second_round' ? 'Second Round' : 'First Round'}
                                                     </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                                                        Unallocated
-                                                    </span>
-                                                )}
-                                            </td>
+                                                </td>
 
-                                            {/* Score */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <Star size={16} className="text-yellow-400 mr-1 fill-yellow-400" />
-                                                    <span className="text-sm font-bold text-gray-900 dark:text-white">{app.adminData?.reviewScore || "-"}</span>
-                                                    <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">/ 5</span>
-                                                </div>
-                                            </td>
+                                                {/* 3. Status */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {(() => {
+                                                        const status = app.adminData?.internalDecision || 'undecided';
+                                                        const colors = {
+                                                            accepted: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                                                            rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                                                            waitlisted: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+                                                            undecided: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                        };
+                                                        return (
+                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${colors[status] || colors.undecided}`}>
+                                                                {status}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
 
-                                            {/* My Review Button */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <Link href={`/admin/application?id=${app.userId}`} className="inline-flex items-center px-3 py-1 border border-blue-500 text-xs font-medium rounded-full text-blue-500 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors">
-                                                    Review Now
-                                                </Link>
-                                            </td>
+                                                {/* 4. Avg Score */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
+                                                    <div className="font-bold">{avgScore}</div>
+                                                </td>
 
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <StatusTag status={app.status} internal={app.adminData?.internalDecision || undefined} />
-                                            </td>
+                                                {/* 5. Camp Availability */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                                                    <div className="truncate max-w-[150px]" title={availString}>
+                                                        {availString}
+                                                    </div>
+                                                </td>
 
-                                            {/* Actions */}
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <Link href={`/admin/application?id=${app.userId}`} className="text-slate-500 dark:text-slate-400 hover:text-blue-600 transition-colors flex items-center justify-end gap-1">
-                                                    <Eye size={18} />
-                                                    <span>Details</span>
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                {/* 6. Camp Allocation */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                                                    {app.adminData?.campAllocation || '-'}
+                                                </td>
+
+                                                {/* 7. My Review */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                    <Link
+                                                        href={`/admin/application?id=${app.userId}`}
+                                                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 font-semibold"
+                                                    >
+                                                        Review Now
+                                                    </Link>
+                                                </td>
+
+                                                {/* 8. Actions (Details -> Review Summary) */}
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <Link
+                                                        href={`/admin/review-summary?id=${app.userId}`}
+                                                        className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                                                    >
+                                                        Details
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                             {filteredApps.length === 0 && (
@@ -293,10 +310,10 @@ export default function AdminDashboardPage() {
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
-            </main>
-        </div>
+                    </div >
+                </div >
+            </main >
+        </div >
     );
 }
 
@@ -315,16 +332,3 @@ function FilterSelect({ value, onChange, options }: { value: string, onChange: (
     )
 }
 
-function StatusTag({ status, internal }: { status: string, internal?: string }) {
-    if (status === 'rejected' || internal === 'rejected') {
-        return <span className="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Rejected</span>
-    }
-    if (['decision_released', 'enrolled', 'accepted'].includes(status) || internal === 'accepted') {
-        return <span className="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Accepted</span>
-    }
-    if (status === 'waitlisted' || internal === 'waitlisted') {
-        return <span className="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Waitlist</span>
-    }
-
-    return <span className="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Pending</span>
-}
