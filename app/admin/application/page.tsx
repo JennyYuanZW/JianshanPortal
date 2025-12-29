@@ -82,6 +82,13 @@ function AdminApplicationDetailContent() {
 
     const handleSaveReview = async () => {
         if (!application || !user?.email) return;
+
+        // Validation: Comments required for first round
+        if (activeRound === 'first_round' && !reviewNote.trim()) {
+            alert("Please provide comments for the First Round review.");
+            return;
+        }
+
         setSaving(true);
         try {
             await dbService.updateAdminReview(application.userId, {
@@ -143,8 +150,8 @@ function AdminApplicationDetailContent() {
                                 <span>•</span>
                                 <StatusTag status={application.status} />
                                 <span className={`px-2 py-0.5 rounded-full text-xs border ${application.adminData?.stage === 'second_round'
-                                        ? 'border-purple-200 text-purple-700 bg-purple-50'
-                                        : 'border-blue-200 text-blue-700 bg-blue-50'
+                                    ? 'border-purple-200 text-purple-700 bg-purple-50'
+                                    : 'border-blue-200 text-blue-700 bg-blue-50'
                                     }`}>
                                     {application.adminData?.stage === 'second_round' ? '2nd Round' : '1st Round'}
                                 </span>
@@ -239,8 +246,8 @@ function AdminApplicationDetailContent() {
                                     <button
                                         onClick={() => setActiveRound('first_round')}
                                         className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${activeRound === 'first_round'
-                                                ? 'border-b-2 border-blue-600 text-blue-600 bg-white dark:bg-slate-800'
-                                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            ? 'border-b-2 border-blue-600 text-blue-600 bg-white dark:bg-slate-800'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                                             }`}
                                     >
                                         First Round
@@ -248,8 +255,8 @@ function AdminApplicationDetailContent() {
                                     <button
                                         onClick={() => setActiveRound('second_round')}
                                         className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${activeRound === 'second_round'
-                                                ? 'border-b-2 border-purple-600 text-purple-600 bg-white dark:bg-slate-800'
-                                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            ? 'border-b-2 border-purple-600 text-purple-600 bg-white dark:bg-slate-800'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                                             }`}
                                     >
                                         Second Round
@@ -262,23 +269,26 @@ function AdminApplicationDetailContent() {
                                 <div className="p-6 space-y-6">
 
                                     {/* Score */}
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Overall Rating (1-5)</label>
-                                        <div className="flex gap-2">
-                                            {[1, 2, 3, 4, 5].map(score => (
-                                                <button
-                                                    key={score}
-                                                    onClick={() => setReviewScore(score)}
-                                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${reviewScore === score
-                                                        ? 'bg-blue-600 text-white ring-2 ring-blue-300'
-                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
-                                                        }`}
-                                                >
-                                                    {score}
-                                                </button>
-                                            ))}
+                                    {/* Score - Only for Round 2 */}
+                                    {activeRound === 'second_round' && (
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Overall Rating (1-5)</label>
+                                            <div className="flex gap-2">
+                                                {[1, 2, 3, 4, 5].map(score => (
+                                                    <button
+                                                        key={score}
+                                                        onClick={() => setReviewScore(score)}
+                                                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${reviewScore === score
+                                                            ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
+                                                            }`}
+                                                    >
+                                                        {score}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Decision */}
                                     <div className="space-y-2">
@@ -297,6 +307,20 @@ function AdminApplicationDetailContent() {
                                                 </button>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    {/* Action Button: Save Review */}
+                                    {/* Review Comments */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                            Review Comments {activeRound === 'first_round' && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <Textarea
+                                            placeholder={`Enter specific feedback for ${activeRound === 'first_round' ? 'Round 1' : 'Round 2'}...`}
+                                            value={reviewNote}
+                                            onChange={(e) => setReviewNote(e.target.value)}
+                                            className="text-sm min-h-[100px]"
+                                        />
                                     </div>
 
                                     {/* Action Button: Save Review */}
@@ -339,12 +363,6 @@ function AdminApplicationDetailContent() {
                                             ))}
                                             {notes.length === 0 && <p className="text-xs text-slate-400 italic">No notes yet.</p>}
                                         </div>
-                                        <Textarea
-                                            placeholder="Add a new note..."
-                                            value={reviewNote}
-                                            onChange={(e) => setReviewNote(e.target.value)}
-                                            className="text-sm min-h-[80px]"
-                                        />
                                     </div>
 
                                 </div>

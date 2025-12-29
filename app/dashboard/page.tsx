@@ -6,211 +6,151 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { dbService, DBApplication } from "@/lib/db-service";
 import { Button } from "@/components/ui/button";
-import { Check, Clock, FileText, Calendar, Mail, Loader2, ArrowRight, CreditCard, Download, Flag, PenTool, User, Eye, FilePen } from "lucide-react";
+import { Check, Clock, FileText, Calendar, Mail, Loader2, ArrowRight, CreditCard, Download, Flag, Eye, FilePen, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Components ---
 
-function ProgressTimeline({ status }: { status: DBApplication['status'] }) {
-    // Current Logic:
-    // Registration: Always Check
-    // Application Submitted: Check if submitted+, else Future
-    // Under Review: Check if decision+, Active Pulse if under_review, Future if submitted only.
-    // Final Decision: Check/Flag(Color) if decision+, Future if under_review or before.
+function ProgressTimeline({ app }: { app: DBApplication }) {
+    const status = app.status;
+    const stage = app.adminData?.stage;
+
+    // Timeline Steps Logic
+    // 1. Registration: Always Done
+    // 2. Filling Application: Done if submitted, Active if draft.
+    // 3. Application Submitted: Done if submitted.
+    // 4. Initial Review: Done if (under_review AND stage=second_round) OR decision released. Active if under_review AND stage=first_round.
+    // 5. Second Round Review: Active if under_review AND stage=second_round. Done if decision released.
+    // 6. Final Decision: Done if decision released.
 
     const isSubmitted = status !== 'draft';
     const isUnderReview = ['under_review', 'decision_released', 'enrolled', 'accepted', 'rejected', 'waitlisted'].includes(status);
     const isDecisionReleased = ['decision_released', 'enrolled', 'accepted', 'rejected', 'waitlisted'].includes(status);
-    const isEnrolled = status === 'enrolled';
 
-    return (
-        <div className="bg-white rounded-xl p-6 md:p-8 shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold text-foreground mb-6">Progress Timeline</h3>
-            <div className="grid grid-cols-[40px_1fr] gap-x-4">
+    // Stage Logic
+    // If we are in 'under_review' and NOT 'second_round', we assume we are in Initial Review (or just generic review).
+    // If we are in 'under_review' AND 'second_round', Initial Review is PASSED.
+    const isRound2 = stage === 'second_round';
 
-                {/* --- Step 1: Registration --- */}
-                {/* Icon Column */}
-                <div className="flex flex-col items-center gap-1 pt-1">
-                    <div className="size-8 rounded-full bg-primary flex items-center justify-center text-white">
-                        <Check size={20} className="text-white" strokeWidth={3} />
-                    </div>
-                    {/* Vertical Line */}
-                    <div className="w-[2px] bg-primary h-full min-h-[40px]"></div>
-                </div>
-                {/* Text Column */}
-                <div className="flex flex-col pb-8">
-                    <p className="text-base font-bold leading-normal text-foreground">Registration</p>
-                    <p className="text-sm text-muted-foreground font-normal leading-normal">Completed on May 10, 2025</p>
-                </div>
+    // Determine Step States
+    const step1_Reg: 'done' | 'active' | 'future' = 'done'; // Always done
+    const step2_Fill: 'done' | 'active' | 'future' = isSubmitted ? 'done' : 'active';
+    const step3_Submit: 'done' | 'active' | 'future' = isSubmitted ? 'done' : 'future';
 
-                {/* --- Step 2: Filling Application (New) --- */}
-                {/* Icon Column */}
-                <div className="flex flex-col items-center gap-1 pt-1">
-                    {isSubmitted ? (
-                        // Completed
-                        <div className="size-8 rounded-full bg-primary flex items-center justify-center text-white z-10">
-                            <Check size={20} className="text-white" strokeWidth={3} />
-                        </div>
-                    ) : (
-                        // Active (Draft) - Yellow Pulse
-                        <div className="size-8 rounded-full border-[3px] border-accent bg-white relative z-10 shadow-[0_0_15px_rgba(225,177,104,0.4)] flex items-center justify-center">
-                            <div className="size-2.5 bg-accent rounded-full animate-pulse"></div>
-                        </div>
-                    )}
-                    {/* Vertical Line */}
+    // Initial Review: 
+    // If decision released -> Done.
+    // If Round 2 -> Done.
+    // If Under Review (and not R2) -> Active? (Or just done if we consider submission = initial review start)
+    // Let's say: Active if Under Review & R1. Done if R2 or Decision Released.
+    let step4_Initial: 'done' | 'active' | 'future' = 'future';
+    if (isDecisionReleased) step4_Initial = 'done';
+    else if (isRound2) step4_Initial = 'done';
+    else if (isUnderReview) step4_Initial = 'done'; // Assuming generic under_review means passed initial screening mostly? Or 'active'. Let's say 'Passed on...' implies done. 
+
+    // Second Round:
+    // If decision released -> Done (or skipped if never went to R2? effectively done)
+    // If Round 2 -> Active.
+    let step5_Round2: 'done' | 'active' | 'future' = 'future';
+    if (isDecisionReleased) step5_Round2 = 'done';
+    else if (isRound2) step5_Round2 = 'active';
+
+    // Final Decision:
+    let step6_Final: 'done' | 'active' | 'future' = 'future';
+    if (isDecisionReleased) step6_Final = 'active'; // Or 'done' visual? Design shows Flag.
+
+    // Helper for Timeline Item
+    const TimelineItem = ({
+        title,
+        date,
+        state,
+        last = false
+    }: {
+        title: string,
+        date: string,
+        state: 'done' | 'active' | 'future',
+        last?: boolean
+    }) => {
+        return (
+            <div className="relative flex items-start mb-10 last:mb-0 group">
+                {!last && (
                     <div className={cn(
-                        "w-[2px] h-full min-h-[40px]",
-                        isSubmitted ? "bg-primary" : "bg-muted"
+                        "absolute top-2 left-[18px] bottom-[-40px] w-0.5",
+                        state === 'done' ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700"
                     )}></div>
-                </div>
-                {/* Text Column */}
-                <div className="flex flex-col pb-8 pt-1">
-                    <p className={cn("text-base font-bold leading-normal")}>
-                        Filling Application
-                    </p>
-                    <p className="text-sm text-muted-foreground font-normal leading-normal">
-                        {isSubmitted ? "Completed" : "In Progress..."}
-                    </p>
-                </div>
-
-                {/* --- Step 3: Application Submitted --- */}
-                {/* Icon Column */}
-                <div className="flex flex-col items-center gap-1 pt-1">
-                    {/* Top connector adjustment if needed, but the previous line flows into this */}
-                    {/* 
-                       Logic for Icon:
-                       - If Submitted: Check (Primary)
-                       - If Not: Future (Gray) - (Though realistic user only sees this if submitted usually)
-                     */}
-                    {isSubmitted ? (
-                        <div className="size-8 rounded-full bg-primary flex items-center justify-center text-white z-10">
-                            <Check size={20} className="text-white" strokeWidth={3} />
-                        </div>
-                    ) : (
-                        <div className="size-8 rounded-full bg-muted border-2 border-border flex items-center justify-center text-muted-foreground z-10">
-                            <div className="h-2 w-2 rounded-full bg-muted-foreground/30"></div>
-                        </div>
-                    )}
-                    {/* Vertical Line: Submitted -> Under Review */}
-                    {/* If next step (Under Review) is active or done, line should be primary? 
-                        Reference: "Registration" -> "App Submitted" line is primary.
-                        "App Submitted" -> "Under Review" line is primary ONLY if "Under Review" is reached.
-                    */}
-                    <div className={cn(
-                        "w-[2px] h-full min-h-[40px]",
-                        isUnderReview ? "bg-primary" : "bg-muted" // Or bg-slate-200
-                    )}></div>
-                </div>
-                {/* Text Column */}
-                <div className="flex flex-col pb-8 pt-1">
-                    <p className={cn("text-base font-bold leading-normal", !isSubmitted && "text-muted-foreground")}>Application Submitted</p>
-                    <p className="text-sm text-muted-foreground font-normal leading-normal">
-                        {isSubmitted ? "Submitted on June 12, 2025" : "Pending Submission"}
-                    </p>
-                </div>
-
-                {/* --- Step 3: Under Review --- */}
-                {/* Icon Column */}
-                <div className="flex flex-col items-center gap-1 pt-1">
-                    {isDecisionReleased ? (
-                        // Completed
-                        <div className="size-8 rounded-full bg-primary flex items-center justify-center text-white z-10">
-                            <Check size={20} className="text-white" strokeWidth={3} />
-                        </div>
-                    ) : isUnderReview ? (
-                        // Active Pulse
-                        <div className="size-8 rounded-full border-[3px] border-accent bg-white relative z-10 shadow-[0_0_15px_rgba(225,177,104,0.4)] flex items-center justify-center">
-                            <div className="size-2.5 bg-accent rounded-full animate-pulse"></div>
-                        </div>
-                    ) : (
-                        // Future
-                        <div className="size-8 rounded-full bg-muted border-2 border-border flex items-center justify-center text-muted-foreground z-10">
-                            <div className="h-2 w-2 rounded-full bg-muted-foreground/30"></div>
-                        </div>
-                    )}
-
-                    {/* Vertical Line: Under Review -> Decision */}
-                    <div className={cn(
-                        "w-[2px] h-full min-h-[40px]",
-                        isDecisionReleased ? "bg-primary" : "bg-muted"
-                    )}></div>
-                </div>
-                {/* Text Column */}
-                <div className="flex flex-col pb-8 pt-1">
-                    <p className={cn(
-                        "text-base font-bold leading-normal",
-                        isUnderReview && !isDecisionReleased ? "text-primary dark:text-accent" : // Active color
-                            !isUnderReview ? "text-muted-foreground" : "text-foreground"
-                    )}>
-                        Under Review
-                    </p>
-                    <p className="text-sm text-muted-foreground font-normal leading-normal">
-                        {isUnderReview && !isDecisionReleased ? "Currently in progress by admissions team" :
-                            isDecisionReleased ? "Review completed" : "Pending review"}
-                    </p>
-                </div>
-
-                {/* --- Step 4: Final Decision --- */}
-                {/* Icon Column */}
-                <div className="flex flex-col items-center gap-1 pt-1">
-                    {/* Line from top is handled by previous block */}
-
-                    {/* Icon */}
-                    {isDecisionReleased ? (
-                        isEnrolled ? (
-                            <div className="size-8 rounded-full bg-primary flex items-center justify-center text-white z-10">
-                                <Check size={20} className="text-white" strokeWidth={3} />
-                            </div>
-                        ) : (
-                            // Decision Out but not enrolled (Action Required) -> Active Glow State
-                            <div className="size-8 rounded-full bg-[#FFF8E6] border-[3px] border-[#E1B168] relative z-10 shadow-[0_0_15px_rgba(225,177,104,0.6)] flex items-center justify-center text-[#E1B168]">
-                                <Flag size={16} className="text-[#E1B168] fill-[#E1B168] animate-pulse" />
-                            </div>
-                        )
-                    ) : (
-                        // Future
-                        <div className="size-8 rounded-full bg-muted border-2 border-border flex items-center justify-center text-muted-foreground z-10">
-                            <Flag size={18} />
-                        </div>
-                    )}
-
-                    {/* Line to next? Only if Enrolled state exists as a step */}
-                    {isEnrolled && <div className="w-[2px] bg-primary h-full min-h-[40px]"></div>}
-                </div>
-                {/* Text Column */}
-                <div className={cn("flex flex-col pt-1", isEnrolled ? "pb-8" : "pb-0")}>
-                    <p className={cn(
-                        "text-base font-bold leading-normal",
-                        isDecisionReleased ? "text-foreground" : "text-muted-foreground"
-                    )}>
-                        Final Decision
-                    </p>
-                    <p className="text-sm text-muted-foreground font-normal leading-normal">
-                        {isDecisionReleased ? "Decision Available" : "Expected July 15, 2025"}
-                    </p>
-                </div>
-
-                {/* --- Optional Step 5: Offer Accepted --- */}
-                {isEnrolled && (
-                    <>
-                        {/* Icon Column */}
-                        <div className="flex flex-col items-center gap-1 pt-0">
-                            <div className="size-8 rounded-full bg-green-50 border-[3px] border-green-600 relative z-10 shadow-[0_0_15px_rgba(22,163,74,0.6)] flex items-center justify-center text-green-600">
-                                <Check size={20} className="text-green-600 animate-pulse" strokeWidth={3} />
-                            </div>
-                        </div>
-                        {/* Text Column */}
-                        <div className="flex flex-col pb-1 pt-1">
-                            <p className="text-base font-bold leading-normal text-green-700">
-                                Offer Accepted
-                            </p>
-                            <p className="text-sm text-muted-foreground font-normal leading-normal">
-                                See you this summer!
-                            </p>
-                        </div>
-                    </>
                 )}
 
+                <div className="absolute left-0 z-10">
+                    {state === 'done' && (
+                        <div className="bg-green-500 rounded-full p-1 border-4 border-white dark:border-slate-800">
+                            <Check size={14} className="text-white font-bold" strokeWidth={4} />
+                        </div>
+                    )}
+                    {state === 'active' && (
+                        <div className="bg-white dark:bg-slate-800 rounded-full p-1 border-4 border-[#DCA54E] shadow-lg">
+                            <div className="w-4 h-4 bg-[#DCA54E] rounded-full"></div>
+                        </div>
+                    )}
+                    {state === 'future' && (
+                        <div className="bg-gray-200 dark:bg-gray-700 rounded-full p-1.5 border-4 border-white dark:border-slate-800">
+                            <Flag size={14} className="text-gray-400 dark:text-gray-500" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="ml-12">
+                    <h3 className={cn(
+                        "text-lg font-semibold transition-colors",
+                        state === 'active' ? "text-[#DCA54E] dark:text-[#DCA54E]" :
+                            state === 'done' ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-gray-500"
+                    )}>{title}</h3>
+
+                    {state === 'active' && (
+                        <p className="text-sm text-slate-600 dark:text-slate-300 font-medium bg-yellow-50 dark:bg-yellow-900/20 px-2 py-0.5 rounded inline-block mt-1">
+                            In Progress...
+                        </p>
+                    )}
+
+                    <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">{date}</p>
+                </div>
+            </div>
+        )
+    };
+
+    return (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 sm:p-8 border border-gray-100 dark:border-gray-700">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-8">Progress Timeline</h2>
+            <div className="relative pl-2">
+                <TimelineItem
+                    title="Registration"
+                    date="Completed"
+                    state="done"
+                />
+                <TimelineItem
+                    title="Filling Application"
+                    date={isSubmitted ? "Completed" : "In Progress"}
+                    state={step2_Fill}
+                />
+                <TimelineItem
+                    title="Application Submitted"
+                    date={app.timeline?.submittedAt ? `Submitted on ${new Date(app.timeline.submittedAt).toLocaleDateString()}` : "Pending"}
+                    state={step3_Submit}
+                />
+                <TimelineItem
+                    title="Initial Review"
+                    date={step4_Initial === 'done' ? "Passed" : "Pending"}
+                    state={step4_Initial}
+                />
+                <TimelineItem
+                    title="Second Round Review"
+                    date="Detailed assessment by committee"
+                    state={step5_Round2}
+                />
+                <TimelineItem
+                    title="Final Decision"
+                    date="Expected July 15, 2025"
+                    state={step6_Final}
+                    last={true}
+                />
             </div>
         </div>
     );
@@ -219,51 +159,46 @@ function ProgressTimeline({ status }: { status: DBApplication['status'] }) {
 
 function ApplicationDetails({ app, user }: { app: DBApplication, user: any }) {
     return (
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="p-4 border-b bg-[#F9FAFC]">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Details</h3>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-slate-50/50 dark:bg-slate-800/50">
+                <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</h3>
             </div>
-            <div className="p-5 flex flex-col gap-4">
-                <div className="flex items-start gap-3">
-                    <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <div className="p-6 space-y-6">
+                <div className="flex items-start gap-4">
+                    <div className="mt-0.5 text-slate-400">
+                        <User size={20} />
+                    </div>
                     <div>
-                        <p className="text-xs uppercase font-bold text-muted-foreground">Applicant Name</p>
-                        <p className="text-sm font-medium">{user.displayName || user.email}</p>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-0.5">Applicant Name</p>
+                        <p className="text-base font-medium text-slate-900 dark:text-white">{user.displayName || user.email}</p>
                     </div>
                 </div>
-                <div className="h-px bg-border w-full"></div>
-                <div className="flex items-start gap-3">
-                    <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="flex items-start gap-4">
+                    <div className="mt-0.5 text-slate-400">
+                        <FileText size={20} />
+                    </div>
                     <div>
-                        <p className="text-xs uppercase font-bold text-muted-foreground">Application ID</p>
-                        <p className="text-sm font-medium">#{app.userId.slice(0, 8).toUpperCase()}</p>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-0.5">Application ID</p>
+                        <p className="text-base font-medium text-slate-900 dark:text-white">#{app.userId.slice(0, 8).toUpperCase()}</p>
                     </div>
                 </div>
-                <div className="h-px bg-border w-full"></div>
-                <div className="flex items-start gap-3">
-                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="flex items-start gap-4">
+                    <div className="mt-0.5 text-slate-400">
+                        <Calendar size={20} />
+                    </div>
                     <div>
-                        <p className="text-xs uppercase font-bold text-muted-foreground">Submission Date</p>
-                        <p className="text-sm font-medium">{app.timeline?.submittedAt ? new Date(app.timeline.submittedAt).toLocaleDateString() : 'N/A'}</p>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-0.5">Submission Date</p>
+                        <p className="text-base font-medium text-slate-900 dark:text-white">
+                            {app.timeline?.submittedAt ? new Date(app.timeline.submittedAt).toLocaleDateString() : 'N/A'}
+                        </p>
                     </div>
                 </div>
             </div>
-            <div className="p-4 border-t bg-[#F9FAFC]">
-                {app.status === 'draft' ? (
-                    <Button variant="outline" className="w-full font-bold" asChild>
-                        <Link href="/apply">
-                            <FilePen className="mr-2 h-4 w-4" strokeWidth={2.5} />
-                            Edit Application
-                        </Link>
-                    </Button>
-                ) : (
-                    <Button variant="outline" className="w-full font-bold" asChild>
-                        <Link href="/apply">
-                            <Eye className="mr-2 h-4 w-4" strokeWidth={2.5} />
-                            View Full Application
-                        </Link>
-                    </Button>
-                )}
+            <div className="px-6 pb-6">
+                <button className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium py-2.5 px-4 rounded-lg transition-colors flex justify-center items-center gap-2">
+                    <FilePen size={16} />
+                    Edit Application
+                </button>
             </div>
         </div>
     );
@@ -275,36 +210,17 @@ export default function DashboardPage() {
     const [app, setApp] = useState<DBApplication | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Initial auth check
     useEffect(() => {
-        if (!authLoading && !user) {
-            router.push("/login");
-        }
+        if (!authLoading && !user) router.push("/login");
     }, [authLoading, user, router]);
 
-    // Data Load
     useEffect(() => {
         const fetchApp = async () => {
             if (!user) return;
-            const uid = user.uid;
-            console.log("Dashboard fetching app for:", uid);
             try {
-                const myApp = await dbService.getMyApplication(uid);
+                const myApp = await dbService.getMyApplication(user.uid);
                 setApp(myApp);
-
-                // If no app (shouldn't happen if registered), redirect or handle.
-                // For real flow, usually user clicks Apply first.
-                // If dashboard is home, maybe show "Start Application".
-                // Current flow: if no app, redirect to welcome?
-                // But welcome says "Registration Complete".
-                // If myApp is null, we should probably redirect to welcome or show "Empty".
-                if (!myApp) {
-                    console.log("No app found on dashboard, redirecting to welcome");
-                    router.replace("/welcome");
-                    return;
-                }
-            } catch (err) {
-                console.error("Dashboard fetch error:", err);
+                if (!myApp) router.replace("/welcome");
             } finally {
                 setLoading(false);
             }
@@ -312,185 +228,147 @@ export default function DashboardPage() {
         fetchApp();
     }, [user, router]);
 
-    // Helper to advance state for demo
+    // Helpers for Dev
     const handleAdvance = async () => {
         if (!user || !app) return;
         setLoading(true);
-        const uid = user.uid;
-        try {
-            await dbService.advanceStatus(uid, app.status);
-            // Re-fetch to see changes
-            const updated = await dbService.getMyApplication(uid);
-            setApp(updated);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Helper to rollback state for demo - DISABLED for now in DB mode
-    const handleRollback = async () => {
-        // Not implemented in DB service yet
-        console.warn("Rollback not implemented");
+        await dbService.advanceStatus(user.uid, app.status);
+        const updated = await dbService.getMyApplication(user.uid);
+        setApp(updated);
+        setLoading(false);
     };
 
     if (authLoading || loading) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        );
+        return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#DCA54E]" /></div>;
     }
 
     if (!user || !app) return null;
 
-    // --- RENDER BASED ON STATUS ---
+    const isRound2 = app.status !== 'decision_released' && app.status !== 'enrolled' && app.adminData?.stage === 'second_round';
 
     return (
-        <div className="container max-w-7xl mx-auto px-4 py-8 md:py-12">
+        <div className="bg-[#F3F5F7] dark:bg-[#111827] min-h-screen font-sans text-slate-900 dark:text-white transition-colors duration-200">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-            {/* Header Area */}
-            <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl md:text-4xl font-black text-foreground">Application Status</h1>
-                    <p className="text-muted-foreground text-lg">Track the progress of your summer camp application.</p>
-                </div>
+                    {/* Left Column */}
+                    <div className="lg:col-span-2 space-y-6">
 
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Left Main Content */}
-                <div className="lg:col-span-8 flex flex-col gap-8">
-
-                    <div className="bg-white rounded-xl p-6 md:p-8 shadow-sm border relative overflow-hidden group">
-                        {/* Dynamic Backgrounds based on status */}
-                        <div className={cn(
-                            "absolute -right-10 -top-10 h-40 w-40 rounded-full blur-3xl transition-all duration-700",
-                            app.status === 'enrolled' ? "bg-green-500/10" : "bg-accent/10"
-                        )} />
-
-                        <div className="relative z-10 flex flex-col gap-4">
-                            <div className="flex items-center gap-3">
-                                {app.status === 'enrolled' ? (
-                                    <span className="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-xs font-bold uppercase">Accepted & Confirmed</span>
-                                ) : app.status === 'decision_released' ? (
-                                    <span className="px-3 py-1 rounded-full bg-accent text-primary text-xs font-bold uppercase">Action Required</span>
-                                ) : (
-                                    <span className="px-3 py-1 rounded-full bg-primary/10 text-primary dark:text-accent text-xs font-bold uppercase">Current Status</span>
-                                )}
-                                <span className="text-sm text-muted-foreground">Updated recently</span>
+                        {/* HERO CARD */}
+                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 sm:p-8 border border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 uppercase tracking-wide">
+                                    Current Status
+                                </div>
+                                <span className="text-sm text-slate-500 dark:text-slate-400">Updated recently</span>
                             </div>
 
-                            {/* MAIN STATUS TEXT */}
-                            {app.status === 'enrolled' ? (
+                            {/* DYNAMIC HERO CONTENT */}
+                            {isRound2 ? (
                                 <>
-                                    <h2 className="text-2xl md:text-3xl font-bold leading-tight">录取成功，已接受 Offer！ 🎉</h2>
-                                    <p className="text-muted-foreground leading-relaxed">
-                                        Congratulations! You have accepted our offer. Please complete the tuition payment to secure your spot.
+                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
+                                        Second Round Review <span className="text-3xl">🧐</span>
+                                    </h1>
+                                    <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-2xl">
+                                        Congratulations! Your application has successfully passed the initial screening. We are now conducting a thorough second round review. Our team is carefully assessing your qualifications against our criteria.
                                     </p>
-                                    <div className="mt-4 pt-4 border-t flex flex-col sm:flex-row gap-4">
-                                        <Button size="lg">
-                                            前往缴费 <CreditCard className="ml-2 h-5 w-5" />
-                                        </Button>
-                                        <Button variant="outline" size="lg">
-                                            Download Acceptance Letter <Download className="ml-2 h-5 w-5" />
-                                        </Button>
-                                    </div>
+                                    <Button className="bg-[#DCA54E] hover:bg-yellow-600 text-white font-semibold py-6 px-8 rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg transform active:scale-95 duration-150">
+                                        Complete Second Round Task <ArrowRight size={18} />
+                                    </Button>
+                                </>
+                            ) : app.status === 'enrolled' ? (
+                                <>
+                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">Welcome Aboard! 🎉</h1>
+                                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                                        You have accepted the offer. We can't wait to see you this summer!
+                                    </p>
+                                    <Button className="bg-green-600 hover:bg-green-700 text-white py-6 px-8 rounded-lg shadow-md">
+                                        Download Welcome Packet <Download size={18} className="ml-2" />
+                                    </Button>
                                 </>
                             ) : app.status === 'decision_released' ? (
                                 <>
-                                    <h2 className="text-2xl md:text-3xl font-bold leading-tight">Application Results Available 🔔</h2>
-                                    <p className="text-muted-foreground leading-relaxed">
-                                        The admissions team has completed the review of your application. Please click below to view your result.
+                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">Decision Available 🔔</h1>
+                                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                                        Your application decision is ready to view.
                                     </p>
-                                    <div className="mt-4 pt-4 border-t flex gap-4">
-                                        <Button size="lg" asChild>
-                                            <Link href="/acceptance">
-                                                查看申请结果 <ArrowRight className="ml-2 h-5 w-5" />
-                                            </Link>
-                                        </Button>
-                                    </div>
+                                    <Button asChild className="bg-[#DCA54E] hover:bg-yellow-600 text-white py-6 px-8 rounded-lg shadow-md">
+                                        <Link href="/acceptance">View Decision <ArrowRight size={18} className="ml-2" /></Link>
+                                    </Button>
                                 </>
                             ) : app.status === 'draft' ? (
-                                // Draft State
                                 <>
-                                    <h2 className="text-2xl md:text-3xl font-bold leading-tight">Application In Progress ✍️</h2>
-                                    <p className="text-muted-foreground leading-relaxed">
-                                        Please complete your application form as soon as possible to secure your spot. We look forward to reviewing your application!
+                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">Application In Progress ✍️</h1>
+                                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                                        Continue where you left off.
                                     </p>
-                                    <div className="mt-4 pt-4 border-t flex gap-4">
-                                        <Button size="lg" asChild>
-                                            <Link href="/apply">
-                                                Continue Application <ArrowRight className="ml-2 h-5 w-5" />
-                                            </Link>
-                                        </Button>
-                                    </div>
+                                    <Button asChild className="bg-[#DCA54E] hover:bg-yellow-600 text-white py-6 px-8 rounded-lg shadow-md">
+                                        <Link href="/apply">Continue Application <ArrowRight size={18} className="ml-2" /></Link>
+                                    </Button>
                                 </>
                             ) : (
-                                // Default: Submitted or Under Review
+                                // Default / Initial Review / Submitted
                                 <>
-                                    <h2 className="text-2xl md:text-3xl font-bold leading-tight">Your application is under review 👀</h2>
-                                    <p className="text-muted-foreground leading-relaxed">
-                                        We have received all your documents. You should hear back from us by July 15th.
+                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">Application Under Review 👀</h1>
+                                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                                        Your application is currently being reviewed by our admissions team.
                                     </p>
                                 </>
                             )}
                         </div>
+
+                        {/* TIMELINE */}
+                        <ProgressTimeline app={app} />
+
                     </div>
 
-                    <ProgressTimeline status={app.status} />
+                    {/* Right Column */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <ApplicationDetails app={app} user={user} />
 
-                </div>
-
-                {/* Right Sidebar */}
-                <div className="lg:col-span-4 flex flex-col gap-6">
-                    <ApplicationDetails app={app} user={user} />
-
-                    {/* Contact Card */}
-                    <div className="bg-primary rounded-xl p-6 text-white relative overflow-hidden">
-                        <div className="relative z-10">
-                            <h3 className="font-bold text-lg mb-2">Have questions?</h3>
-                            <p className="text-sm text-white/80 mb-4 opacity-90">If you have any issues with your application status, please reach out to our admissions team.</p>
-                            <Button size="sm" className="w-full sm:w-auto" asChild>
-                                <a href="mailto:admissions@jianshan.com">
-                                    <Mail className="mr-2 h-4 w-4" />
-                                    Email Admissions
-                                </a>
-                            </Button>
+                        {/* HELP CARD */}
+                        <div className="bg-[#1E3A4C] rounded-xl shadow-md p-6 relative overflow-hidden text-white">
+                            <div className="absolute -right-10 -bottom-10 opacity-10">
+                                <Mail size={200} />
+                            </div>
+                            <h3 className="text-xl font-bold mb-2 relative z-10">Have questions?</h3>
+                            <p className="text-blue-100 text-sm mb-6 relative z-10 leading-relaxed">
+                                If you have any issues with your application status, please reach out to our admissions team.
+                            </p>
+                            <button className="relative z-10 w-full bg-[#DCA54E] hover:bg-yellow-600 text-[#1E3A4C] font-bold py-2.5 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 shadow-sm">
+                                <Mail size={18} />
+                                Email Admissions
+                            </button>
                         </div>
-                        {/* Background Icon Decoration */}
-                        <div className="absolute -right-6 -bottom-10 opacity-10 rotate-12 text-white pointer-events-none">
-                            <Mail className="h-[120px] w-[120px]" />
+
+                        {/* ROUND 2 TIP - Only show in R2 */}
+                        {isRound2 && (
+                            <div className="bg-blue-50 dark:bg-slate-800 border border-blue-100 dark:border-slate-700 rounded-xl p-4 flex gap-3">
+                                <div className="text-blue-500 dark:text-blue-400 mt-1">
+                                    <Clock size={20} />
+                                </div>
+                                <p className="text-sm text-blue-800 dark:text-slate-300">
+                                    <strong>Round 2 Tip:</strong> Ensure your portfolio links are accessible as reviewers will be clicking them frequently this week.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* DEV TOOLS (Hidden in prod ideally, kept for user flow testing) */}
+                        <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-700">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-4">Developer Tools</h4>
+                            <div className="flex flex-col gap-2">
+                                <Button onClick={handleAdvance} size="sm" variant="outline">Advance State</Button>
+                                <Button onClick={async () => {
+                                    if (!user) return;
+                                    await dbService.resetApplication(user.uid);
+                                    router.push("/welcome");
+                                }} size="sm" variant="destructive">Reset Application</Button>
+                            </div>
                         </div>
+
                     </div>
-
-                    {/* DEV TOOL: Advance State */}
-
-                    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-                        {app.status !== 'enrolled' && (
-                            <Button onClick={handleAdvance} size="sm" className="shadow-xl bg-red-600 hover:bg-red-700 text-white border-2 border-white">
-                                [DEV] Advance State
-                            </Button>
-                        )}
-                        {/* Rollback disabled for now
-                        {(app.status === 'decision_released' || app.status === 'enrolled') && (
-                            <Button onClick={handleRollback} size="sm" className="shadow-xl bg-blue-600 hover:bg-blue-700 text-white border-2 border-white">
-                                [DEV] Previous State
-                            </Button>
-                        )}
-                        */}
-                        <Button onClick={async () => {
-                            if (!user) return;
-                            const uid = user.uid;
-                            setLoading(true);
-                            await dbService.resetApplication(uid);
-                            router.push("/welcome");
-                        }} size="sm" className="shadow-xl bg-slate-800 hover:bg-slate-900 text-white border-2 border-white">
-                            [DEV] Reset / Clear App
-                        </Button>
-                    </div>
-
                 </div>
-            </div>
+            </main>
         </div>
     );
 }
