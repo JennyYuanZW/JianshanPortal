@@ -212,6 +212,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [secondRoundAnswer, setSecondRoundAnswer] = useState("");
     const [submittingR2, setSubmittingR2] = useState(false);
+    const [showRound2, setShowRound2] = useState(false);
 
     useEffect(() => {
         if (!authLoading && !user) router.push("/login");
@@ -294,67 +295,81 @@ export default function DashboardPage() {
 
                             {/* DYNAMIC HERO CONTENT */}
                             {isRound2 ? (
-                                <>
-                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
-                                        Second Round Review <span className="text-3xl">🧐</span>
-                                    </h1>
-                                    <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-2xl">
-                                        Congratulations! Your application has successfully passed the initial screening. We are now conducting a thorough second round review. Our team is carefully assessing your qualifications against our criteria.
-                                    </p>
-                                    <Button className="bg-[#DCA54E] hover:bg-yellow-600 text-white font-semibold py-6 px-8 rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg transform active:scale-95 duration-150">
-                                        Complete Second Round Task <ArrowRight size={18} />
-                                    </Button>
+                                !showRound2 ? (
+                                    <>
+                                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
+                                            Update Available <span className="text-3xl">🔔</span>
+                                        </h1>
+                                        <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-2xl">
+                                            Congratulations! Your application has passed the initial review. The next stage of the selection process is now available for you to complete.
+                                        </p>
+                                        <Button
+                                            onClick={() => setShowRound2(true)}
+                                            className="bg-[#DCA54E] hover:bg-yellow-600 text-white font-semibold py-6 px-8 rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg transform active:scale-95 duration-150"
+                                        >
+                                            View Next Round Tasks <ArrowRight size={18} />
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
+                                            Second Round Review <span className="text-3xl">🧐</span>
+                                        </h1>
+                                        <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-2xl">
+                                            Please complete the video introduction task below to finalize your application for the second round. Our team looks forward to knowing you better!
+                                        </p>
 
-                                    {/* Question for Round 2 */}
-                                    {APPLICATION_CONFIG.secondRound && (
-                                        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
-                                            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{APPLICATION_CONFIG.secondRound.title}</h2>
-                                            <p className="text-slate-600 dark:text-slate-300 mb-4 text-sm whitespace-pre-wrap leading-relaxed">
-                                                {APPLICATION_CONFIG.secondRound.description}
-                                            </p>
-
-                                            <div className="bg-blue-50 dark:bg-slate-700/50 p-4 rounded-md mb-6 border border-blue-100 dark:border-slate-600">
-                                                <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 uppercase tracking-wide">Video Requirements</h4>
-                                                <ul className="list-disc list-inside space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                                                    {APPLICATION_CONFIG.secondRound.requirements.map((req, i) => (
-                                                        <li key={i}>{req}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-
-                                            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-                                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                                    {APPLICATION_CONFIG.secondRound.label}
-                                                </label>
-                                                <p className="text-slate-600 dark:text-slate-400 mb-4 text-sm italic">
-                                                    {APPLICATION_CONFIG.secondRound.prompt}
+                                        {/* Question for Round 2 */}
+                                        {APPLICATION_CONFIG.secondRound && (
+                                            <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                                <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{APPLICATION_CONFIG.secondRound.title}</h2>
+                                                <p className="text-slate-600 dark:text-slate-300 mb-4 text-sm whitespace-pre-wrap leading-relaxed">
+                                                    {APPLICATION_CONFIG.secondRound.description}
                                                 </p>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        className="flex-grow rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                                        placeholder={APPLICATION_CONFIG.secondRound.placeholder}
-                                                        value={secondRoundAnswer}
-                                                        onChange={(e) => setSecondRoundAnswer(e.target.value)}
-                                                    />
-                                                    <Button
-                                                        onClick={handleSecondRoundSubmit}
-                                                        disabled={submittingR2}
-                                                        size="default"
-                                                        className="whitespace-nowrap"
-                                                    >
-                                                        {submittingR2 ? <Loader2 className="animate-spin h-4 w-4" /> : 'Submit'}
-                                                    </Button>
+
+                                                <div className="bg-blue-50 dark:bg-slate-700/50 p-4 rounded-md mb-6 border border-blue-100 dark:border-slate-600">
+                                                    <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 uppercase tracking-wide">Video Requirements</h4>
+                                                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-700 dark:text-slate-300">
+                                                        {APPLICATION_CONFIG.secondRound.requirements.map((req, i) => (
+                                                            <li key={i}>{req}</li>
+                                                        ))}
+                                                    </ul>
                                                 </div>
-                                                {app.formData?.secondRoundVideo && (
-                                                    <p className="mt-2 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                                                        <Check size={12} /> Submission received. Update link to re-submit.
+
+                                                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                                        {APPLICATION_CONFIG.secondRound.label}
+                                                    </label>
+                                                    <p className="text-slate-600 dark:text-slate-400 mb-4 text-sm italic">
+                                                        {APPLICATION_CONFIG.secondRound.prompt}
                                                     </p>
-                                                )}
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            className="flex-grow rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                            placeholder={APPLICATION_CONFIG.secondRound.placeholder}
+                                                            value={secondRoundAnswer}
+                                                            onChange={(e) => setSecondRoundAnswer(e.target.value)}
+                                                        />
+                                                        <Button
+                                                            onClick={handleSecondRoundSubmit}
+                                                            disabled={submittingR2}
+                                                            size="default"
+                                                            className="whitespace-nowrap"
+                                                        >
+                                                            {submittingR2 ? <Loader2 className="animate-spin h-4 w-4" /> : 'Submit'}
+                                                        </Button>
+                                                    </div>
+                                                    {app.formData?.secondRoundVideo && (
+                                                        <p className="mt-2 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                                                            <Check size={12} /> Submission received. Update link to re-submit.
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </>
+                                        )}
+                                    </>
+                                )
                             ) : app.status === 'enrolled' ? (
                                 <>
                                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">Welcome Aboard! 🎉</h1>
