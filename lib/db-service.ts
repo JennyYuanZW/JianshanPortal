@@ -146,8 +146,8 @@ export const dbService = {
             personalInfoSnapshot: {
                 firstName: firstName,
                 lastName: lastName,
-                email: formData['email'],
-                school: formData['school'] || formData['yearOfStudy'] // heuristics
+                email: formData['email'] || '',
+                school: formData['school'] || formData['yearOfStudy'] || '' // heuristics
             }
         };
 
