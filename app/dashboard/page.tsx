@@ -272,13 +272,28 @@ export default function DashboardPage() {
                                         Second Round Review <span className="text-3xl">🧐</span>
                                     </h1>
                                     <p className="text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-2xl">
-                                        Congratulations! Your application has passed the initial review. Please complete the remaining tasks to finalize your application for the second round.
+                                        {!app.formData?.secondRoundVideo
+                                            ? "Congratulations! Your application has passed the initial review. Please complete the remaining tasks to finalize your application for the second round."
+                                            : "You have submitted your second round tasks. Our team will review them shortly."}
                                     </p>
-                                    <Button asChild className="bg-[#DCA54E] hover:bg-yellow-600 text-white font-semibold py-6 px-8 rounded-lg transition-colors shadow-md hover:shadow-lg transform active:scale-95 duration-150">
-                                        <Link href="/second-round">
-                                            Complete Second Round Tasks <ArrowRight size={18} className="ml-2" />
-                                        </Link>
-                                    </Button>
+
+                                    {/* Only show "Complete" button if not submitted (draft/not started) */}
+                                    {!app.formData?.secondRoundVideo && (
+                                        <Button asChild className="bg-[#DCA54E] hover:bg-yellow-600 text-white py-6 px-8 rounded-lg shadow-md transition-colors hover:shadow-lg">
+                                            <Link href="/second-round">
+                                                Complete Second Round Tasks <ArrowRight size={18} className="ml-2" />
+                                            </Link>
+                                        </Button>
+                                    )}
+
+                                    {/* Optional: Show Update button if already submitted */}
+                                    {app.formData?.secondRoundVideo && (
+                                        <Button asChild variant="outline" className="py-6 px-8 rounded-lg shadow-sm">
+                                            <Link href="/second-round">
+                                                Update Submission <ArrowRight size={18} className="ml-2" />
+                                            </Link>
+                                        </Button>
+                                    )}
                                 </>
                             ) : app.status === 'enrolled' ? (
                                 <>
