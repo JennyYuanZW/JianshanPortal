@@ -294,18 +294,36 @@ function AdminApplicationDetailContent() {
                                     <div className="space-y-2">
                                         <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Recommendation</label>
                                         <div className="grid grid-cols-3 gap-2">
-                                            {['accepted', 'waitlisted', 'rejected'].map(decision => (
-                                                <button
-                                                    key={decision}
-                                                    onClick={() => setInternalDecision(decision)}
-                                                    className={`py-2 px-1 rounded-md text-xs font-bold uppercase transition-all ${internalDecision === decision
-                                                        ? (decision === 'accepted' ? 'bg-green-600 text-white' : decision === 'rejected' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white')
-                                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'
-                                                        }`}
-                                                >
-                                                    {decision}
-                                                </button>
-                                            ))}
+                                            {/* Dynamic Decision Buttons */}
+                                            {activeRound === 'first_round' ? (
+                                                // Round 1 Options
+                                                ['second_round', 'waitlisted', 'rejected'].map(decision => (
+                                                    <button
+                                                        key={decision}
+                                                        onClick={() => setInternalDecision(decision)}
+                                                        className={`py-2 px-1 rounded-md text-xs font-bold uppercase transition-all ${internalDecision === decision
+                                                            ? (decision === 'second_round' ? 'bg-purple-600 text-white' : decision === 'rejected' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white')
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'
+                                                            }`}
+                                                    >
+                                                        {decision.replace('_', ' ')}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                // Round 2 Options
+                                                ['accepted', 'waitlisted', 'rejected'].map(decision => (
+                                                    <button
+                                                        key={decision}
+                                                        onClick={() => setInternalDecision(decision)}
+                                                        className={`py-2 px-1 rounded-md text-xs font-bold uppercase transition-all ${internalDecision === decision
+                                                            ? (decision === 'accepted' ? 'bg-green-600 text-white' : decision === 'rejected' ? 'bg-red-600 text-white' : 'bg-yellow-500 text-white')
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'
+                                                            }`}
+                                                    >
+                                                        {decision}
+                                                    </button>
+                                                ))
+                                            )}
                                         </div>
                                     </div>
 

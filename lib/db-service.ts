@@ -340,6 +340,18 @@ export const dbService = {
         // Assuming this function is for INDIVIDUAL reviews.
 
         const docRef = doc(db, COLLECTION, userId);
+
+        // Check for Stage Transition (Round 2)
+        if (data.decision === 'second_round') {
+            updates['adminData.stage'] = 'second_round';
+            // We might also want to set status to 'under_review' just in case, but usually it is already.
+            updates['status'] = 'under_review';
+        }
+        // Check for Final Decision Update (Accepted/Rejected/Waitlisted)
+        else if (data.decision && ['accepted', 'rejected', 'waitlisted'].includes(data.decision)) {
+            updates['adminData.internalDecision'] = data.decision;
+        }
+
         await updateDoc(docRef, updates);
     }
 };

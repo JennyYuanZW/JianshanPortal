@@ -275,6 +275,29 @@ export default function DashboardPage() {
                                     <Button className="bg-[#DCA54E] hover:bg-yellow-600 text-white font-semibold py-6 px-8 rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg transform active:scale-95 duration-150">
                                         Complete Second Round Task <ArrowRight size={18} />
                                     </Button>
+
+                                    {/* Placeholder Question for Round 2 */}
+                                    <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+                                        <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Round 2 Assessment</h2>
+                                        <p className="text-slate-600 dark:text-slate-300 mb-4 text-sm">
+                                            Please answer the following question to complete your second round review.
+                                        </p>
+                                        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                                Question 1
+                                            </label>
+                                            <p className="text-slate-600 dark:text-slate-400 mb-4 italic">
+                                                "Describe a significant challenge you faced and how you overcame it." [Placeholder]
+                                            </p>
+                                            <textarea
+                                                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[100px]"
+                                                placeholder="Type your answer here..."
+                                            ></textarea>
+                                            <div className="mt-3 flex justify-end">
+                                                <Button size="sm">Submit Answer</Button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </>
                             ) : app.status === 'enrolled' ? (
                                 <>
