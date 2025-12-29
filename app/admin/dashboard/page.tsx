@@ -194,7 +194,7 @@ export default function AdminDashboardPage() {
                             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                                 <thead className="bg-gray-50 dark:bg-gray-800/50">
                                     <tr>
-                                        {["Candidate", "Stage", "Status", "Avg Score", "Camp Availability", "Camp Allocation", "My Review", "Actions"].map((head) => (
+                                        {["Candidate", "Stage", "Status", "Avg Score", "Subject Group", "Camp Availability", "Camp Allocation", "My Review", "Actions"].map((head) => (
                                             <th key={head} className="px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider" scope="col">
                                                 {head}
                                             </th>
@@ -268,19 +268,26 @@ export default function AdminDashboardPage() {
                                                     <div className="font-bold">{avgScore}</div>
                                                 </td>
 
-                                                {/* 5. Camp Availability */}
+                                                {/* 5. Subject Group (NEW) */}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                                                        {app.formData?.subjectGroup || "Unspecified"}
+                                                    </span>
+                                                </td>
+
+                                                {/* 6. Camp Availability */}
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                                                     <div className="truncate max-w-[150px]" title={availString}>
                                                         {availString}
                                                     </div>
                                                 </td>
 
-                                                {/* 6. Camp Allocation */}
+                                                {/* 7. Camp Allocation */}
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                                                     {app.adminData?.campAllocation || '-'}
                                                 </td>
 
-                                                {/* 7. My Review */}
+                                                {/* 8. My Review */}
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                     <Link
                                                         href={`/admin/application?id=${app.userId}`}
@@ -290,7 +297,7 @@ export default function AdminDashboardPage() {
                                                     </Link>
                                                 </td>
 
-                                                {/* 8. Actions (Details -> Review Summary) */}
+                                                {/* 9. Actions (Details -> Review Summary) */}
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <Link
                                                         href={`/admin/review-summary?id=${app.userId}`}

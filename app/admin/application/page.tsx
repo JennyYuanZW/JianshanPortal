@@ -43,6 +43,9 @@ function AdminApplicationDetailContent() {
     const [reviewNote, setReviewNote] = useState("");
     const [saving, setSaving] = useState(false);
 
+    // New: Round Selection
+    const [activeRound, setActiveRound] = useState<'first_round' | 'second_round'>('first_round');
+
     useEffect(() => {
         if (!authLoading && !isAdmin) router.push('/');
     }, [authLoading, isAdmin, router]);
@@ -58,6 +61,11 @@ function AdminApplicationDetailContent() {
                 // Init form state
                 setReviewScore(data.adminData?.reviewScore || 0);
                 setInternalDecision(data.adminData?.internalDecision || "");
+                // Default to marking second round if the app is already in second round? 
+                // Alternatively, keep default "first_round" unless manually switched. 
+                if (data.adminData?.stage) {
+                    setActiveRound(data.adminData.stage);
+                }
             }
         } catch (e) {
             console.error("Fetch failed", e);
@@ -80,11 +88,12 @@ function AdminApplicationDetailContent() {
                 reviewScore: reviewScore,
                 decision: internalDecision as any,
                 note: reviewNote,
-                author: user.email
+                author: user.email,
+                stage: activeRound // Pass active round
             });
             setReviewNote("");
             await fetchApplication();
-            alert("Review saved successfully.");
+            alert(`Review for ${activeRound === 'first_round' ? 'First Round' : 'Second Round'} saved successfully.`);
         } catch (e) {
             console.error("Failed to save review", e);
             alert("Failed to save review.");
@@ -133,6 +142,12 @@ function AdminApplicationDetailContent() {
                                 <span className="flex items-center gap-1"><Clock size={14} /> Submitted {application.timeline?.submittedAt ? new Date(application.timeline.submittedAt).toLocaleDateString() : 'N/A'}</span>
                                 <span>•</span>
                                 <StatusTag status={application.status} />
+                                <span className={`px-2 py-0.5 rounded-full text-xs border ${application.adminData?.stage === 'second_round'
+                                        ? 'border-purple-200 text-purple-700 bg-purple-50'
+                                        : 'border-blue-200 text-blue-700 bg-blue-50'
+                                    }`}>
+                                    {application.adminData?.stage === 'second_round' ? '2nd Round' : '1st Round'}
+                                </span>
                             </div>
                         </div>
                         <div className="flex gap-3">
@@ -218,8 +233,31 @@ function AdminApplicationDetailContent() {
                         <div className="space-y-6">
                             {/* Assessment Card */}
                             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden sticky top-24">
-                                <div className="bg-slate-900 text-white px-6 py-4">
-                                    <h3 className="font-bold text-lg">Reviewer Assessment</h3>
+
+                                {/* Tabs for Rounds */}
+                                <div className="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                                    <button
+                                        onClick={() => setActiveRound('first_round')}
+                                        className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${activeRound === 'first_round'
+                                                ? 'border-b-2 border-blue-600 text-blue-600 bg-white dark:bg-slate-800'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                    >
+                                        First Round
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveRound('second_round')}
+                                        className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${activeRound === 'second_round'
+                                                ? 'border-b-2 border-purple-600 text-purple-600 bg-white dark:bg-slate-800'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                    >
+                                        Second Round
+                                    </button>
+                                </div>
+
+                                <div className={`px-6 py-4 ${activeRound === 'second_round' ? 'bg-purple-900' : 'bg-slate-900'} text-white transition-colors duration-300`}>
+                                    <h3 className="font-bold text-lg">Reviewer Assessment - {activeRound === 'second_round' ? 'Round 2' : 'Round 1'}</h3>
                                 </div>
                                 <div className="p-6 space-y-6">
 

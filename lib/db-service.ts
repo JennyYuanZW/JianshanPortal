@@ -57,6 +57,7 @@ export interface DBApplication {
             comment: string;
             author: string;
             date: string;
+            stage?: 'first_round' | 'second_round'; // New field for review stage
             flagged?: boolean;
             flagReason?: string;
         }>;
@@ -302,6 +303,7 @@ export const dbService = {
         decision?: string; // Changed from internalDecision to generic decision for this review
         note?: string;
         author?: string;
+        stage?: 'first_round' | 'second_round'; // New: Accept stage
         flagged?: boolean;
         flagReason?: string;
     }) {
@@ -319,6 +321,7 @@ export const dbService = {
                 comment: data.note || '',
                 author: data.author,
                 date: timestamp,
+                stage: data.stage || 'first_round', // New: Save stage
                 flagged: data.flagged || false,
                 flagReason: data.flagReason || ''
             };
