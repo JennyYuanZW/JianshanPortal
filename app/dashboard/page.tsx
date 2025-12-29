@@ -382,6 +382,17 @@ export default function DashboardPage() {
                                     await dbService.resetApplication(user.uid);
                                     router.push("/welcome");
                                 }} size="sm" variant="destructive">Reset Application</Button>
+                                <Button onClick={async () => {
+                                    if (!user) return;
+                                    setLoading(true);
+                                    await dbService.fixLegacyRound2Data(user.uid);
+                                    const updated = await dbService.getMyApplication(user.uid);
+                                    setApp(updated);
+                                    setLoading(false);
+                                    alert("Data fixed! You should now see the Second Round view.");
+                                }} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white">
+                                    Fix Legacy Data (MCP)
+                                </Button>
                             </div>
                         </div>
 

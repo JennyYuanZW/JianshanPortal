@@ -361,6 +361,20 @@ export const dbService = {
         }
 
         await updateDoc(docRef, updates);
+    },
+
+    // ONE-OFF MIGRATION: Fix legacy Round 2 data
+    async fixLegacyRound2Data(userId: string) {
+        if (!db) return;
+        console.log("[db-service] Fixing legacy data for:", userId);
+        const docRef = doc(db, COLLECTION, userId);
+
+        // Force set stage to second_round and clear internalDecision if it was incorrectly set
+        await updateDoc(docRef, {
+            'adminData.stage': 'second_round',
+            'adminData.internalDecision': deleteField() // Optional: clear if it was specific to the bug
+        });
+        console.log("[db-service] Fixed legacy data.");
     }
 };
 
