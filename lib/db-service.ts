@@ -53,7 +53,7 @@ export interface DBApplication {
         campAllocation?: string; // e.g. "Camp Alpha"
         reviews?: Array<{
             score: number;
-            decision: string; // 'accepted' | 'rejected' | 'waitlisted' | 'second_round'
+            decision: string; // 'accepted' | 'rejected' | 'waitlisted' | 'undecided'
             comment: string;
             author: string;
             date: string;
@@ -298,12 +298,14 @@ export const dbService = {
 
     // Admin: Save Comprehensive Review (Score, Decision, Comment)
     // Now pushes to reviews array
+    // Admin: Save Comprehensive Review (Score, Decision, Comment)
+    // Now pushes to reviews array
     async updateAdminReview(userId: string, data: {
         reviewScore?: number;
-        decision?: string; // Changed from internalDecision to generic decision for this review
+        decision?: string; // 'accepted' | 'rejected' | 'waitlisted' | 'second_round' (Action)
         note?: string;
         author?: string;
-        stage?: 'first_round' | 'second_round'; // New: Accept stage
+        stage?: 'first_round' | 'second_round';
         flagged?: boolean;
         flagReason?: string;
     }) {
@@ -315,39 +317,39 @@ export const dbService = {
 
         // If we have a full review (score + decision + comment), add to reviews array
         if (data.author && (data.reviewScore !== undefined || data.decision || data.note)) {
+            // Determine Recorded Decision for history
             const newReview = {
                 score: data.reviewScore || 0,
                 decision: data.decision || 'undecided',
                 comment: data.note || '',
                 author: data.author,
                 date: timestamp,
-                stage: data.stage || 'first_round', // New: Save stage
+                stage: data.stage || 'first_round',
                 flagged: data.flagged || false,
                 flagReason: data.flagReason || ''
             };
             updates['adminData.reviews'] = arrayUnion(newReview);
 
-            // Update top-level legacy score for easier sorting/filtering if needed
-            // Or calculates average? For now, we might leave the "last" score or just ignore.
-            // Let's update reviewScore to the latest one for the dashboard sort
             if (data.reviewScore) {
                 updates['adminData.reviewScore'] = data.reviewScore;
             }
         }
 
-        // internalDecision is separate (the final verdict), usually set by setInternalDecision
-        // But if this "review" is meant to set the final verdict, we'd use setInternalDecision.
-        // Assuming this function is for INDIVIDUAL reviews.
-
         const docRef = doc(db, COLLECTION, userId);
 
-        // Check for Stage Transition (Round 2)
+        // SEPARATION OF CONCERNS:
+        // STAGE: 'first_round' | 'second_round'
+        // STATUS (Internal Decision): 'accepted' | 'rejected' | 'waitlisted'
+
+        // 1. Handle Stage Transition
         if (data.decision === 'second_round') {
             updates['adminData.stage'] = 'second_round';
-            // We might also want to set status to 'under_review' just in case, but usually it is already.
-            updates['status'] = 'under_review';
+            // Ensure we don't set internalDecision to 'second_round'
+            // We just update the stage. logic elsewhere relies on stage checks.
         }
-        // Check for Final Decision Update (Accepted/Rejected/Waitlisted)
+
+        // 2. Handle Final Decision (Status)
+        // Only update internalDecision if it's a valid final status
         else if (data.decision && ['accepted', 'rejected', 'waitlisted'].includes(data.decision)) {
             updates['adminData.internalDecision'] = data.decision;
         }

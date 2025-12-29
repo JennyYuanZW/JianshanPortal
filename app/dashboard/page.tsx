@@ -8,6 +8,7 @@ import { dbService, DBApplication } from "@/lib/db-service";
 import { Button } from "@/components/ui/button";
 import { Check, Clock, FileText, Calendar, Mail, Loader2, ArrowRight, CreditCard, Download, Flag, Eye, FilePen, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { APPLICATION_CONFIG } from "@/lib/config";
 
 // --- Components ---
 
@@ -209,6 +210,8 @@ export default function DashboardPage() {
     const router = useRouter();
     const [app, setApp] = useState<DBApplication | null>(null);
     const [loading, setLoading] = useState(true);
+    const [secondRoundAnswer, setSecondRoundAnswer] = useState("");
+    const [submittingR2, setSubmittingR2] = useState(false);
 
     useEffect(() => {
         if (!authLoading && !user) router.push("/login");
@@ -227,6 +230,32 @@ export default function DashboardPage() {
         };
         fetchApp();
     }, [user, router]);
+
+    useEffect(() => {
+        if (app?.formData?.secondRoundVideo) {
+            setSecondRoundAnswer(app.formData.secondRoundVideo);
+        }
+    }, [app]);
+
+    const handleSecondRoundSubmit = async () => {
+        if (!app || !user || !secondRoundAnswer.trim()) return;
+        setSubmittingR2(true);
+        try {
+            await dbService.saveApplication(user.uid, {
+                ...app.formData,
+                secondRoundVideo: secondRoundAnswer
+            });
+            alert("Video link submitted successfully!");
+            // Refresh app data
+            const updated = await dbService.getMyApplication(user.uid);
+            setApp(updated);
+        } catch (e) {
+            console.error("Failed to submit", e);
+            alert("Failed to submit.");
+        } finally {
+            setSubmittingR2(false);
+        }
+    };
 
     // Helpers for Dev
     const handleAdvance = async () => {
@@ -276,28 +305,55 @@ export default function DashboardPage() {
                                         Complete Second Round Task <ArrowRight size={18} />
                                     </Button>
 
-                                    {/* Placeholder Question for Round 2 */}
-                                    <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
-                                        <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Round 2 Assessment</h2>
-                                        <p className="text-slate-600 dark:text-slate-300 mb-4 text-sm">
-                                            Please answer the following question to complete your second round review.
-                                        </p>
-                                        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-                                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                                Question 1
-                                            </label>
-                                            <p className="text-slate-600 dark:text-slate-400 mb-4 italic">
-                                                "Describe a significant challenge you faced and how you overcame it." [Placeholder]
+                                    {/* Question for Round 2 */}
+                                    {APPLICATION_CONFIG.secondRound && (
+                                        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+                                            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{APPLICATION_CONFIG.secondRound.title}</h2>
+                                            <p className="text-slate-600 dark:text-slate-300 mb-4 text-sm whitespace-pre-wrap leading-relaxed">
+                                                {APPLICATION_CONFIG.secondRound.description}
                                             </p>
-                                            <textarea
-                                                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[100px]"
-                                                placeholder="Type your answer here..."
-                                            ></textarea>
-                                            <div className="mt-3 flex justify-end">
-                                                <Button size="sm">Submit Answer</Button>
+
+                                            <div className="bg-blue-50 dark:bg-slate-700/50 p-4 rounded-md mb-6 border border-blue-100 dark:border-slate-600">
+                                                <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 uppercase tracking-wide">Video Requirements</h4>
+                                                <ul className="list-disc list-inside space-y-1 text-sm text-slate-700 dark:text-slate-300">
+                                                    {APPLICATION_CONFIG.secondRound.requirements.map((req, i) => (
+                                                        <li key={i}>{req}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+
+                                            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                                    {APPLICATION_CONFIG.secondRound.label}
+                                                </label>
+                                                <p className="text-slate-600 dark:text-slate-400 mb-4 text-sm italic">
+                                                    {APPLICATION_CONFIG.secondRound.prompt}
+                                                </p>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        className="flex-grow rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                        placeholder={APPLICATION_CONFIG.secondRound.placeholder}
+                                                        value={secondRoundAnswer}
+                                                        onChange={(e) => setSecondRoundAnswer(e.target.value)}
+                                                    />
+                                                    <Button
+                                                        onClick={handleSecondRoundSubmit}
+                                                        disabled={submittingR2}
+                                                        size="default"
+                                                        className="whitespace-nowrap"
+                                                    >
+                                                        {submittingR2 ? <Loader2 className="animate-spin h-4 w-4" /> : 'Submit'}
+                                                    </Button>
+                                                </div>
+                                                {app.formData?.secondRoundVideo && (
+                                                    <p className="mt-2 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                                                        <Check size={12} /> Submission received. Update link to re-submit.
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </>
                             ) : app.status === 'enrolled' ? (
                                 <>

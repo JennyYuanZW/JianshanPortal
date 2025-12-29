@@ -139,5 +139,21 @@ export const APPLICATION_CONFIG = {
             label: 'CV / Resume',
             prompt: 'Please attach a copy of your CV.'
         }
-    ]
+    ],
+
+    // Second Round Assessment
+    secondRound: {
+        title: 'Video Introduction',
+        description: 'Imagine you are meeting the students at Jianshan Academy in the summer for the first time and delivering a speech. Think about how you would approach students in your own style to capture their attention, make yourself memorable, and spark their curiosity about your sessions.',
+        requirements: [
+            'Length: Approximately three minutes.',
+            'Include a self-introduction (academic/cultural background).',
+            'Intro to your subject (why you like it) and overview of sessions.',
+            'Showcase personality (fun fact, anecdote, etc.).'
+        ],
+        id: 'secondRoundVideo',
+        label: 'Video Link',
+        prompt: 'Please provide a link to your video (e.g., YouTube, Loom, Google Drive). Ensure permission settings allow viewing.',
+        placeholder: 'https://...'
+    }
 };
