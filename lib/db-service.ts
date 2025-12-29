@@ -255,13 +255,19 @@ export const dbService = {
     },
 
     // Admin: Set Internal Decision
-    async setInternalDecision(userId: string, decision: 'accepted' | 'rejected' | 'waitlisted') {
+    async setInternalDecision(userId: string, decision: 'accepted' | 'rejected' | 'waitlisted' | 'second_round') {
         if (!db) return;
         const timestamp = new Date().toISOString();
         const updates: any = {
-            'adminData.internalDecision': decision,
             lastUpdatedAt: timestamp
         };
+
+        if (decision === 'second_round') {
+            updates['adminData.stage'] = 'second_round';
+        } else {
+            updates['adminData.internalDecision'] = decision;
+        }
+
         const docRef = doc(db, COLLECTION, userId);
         await updateDoc(docRef, updates);
     },
